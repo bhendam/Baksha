@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>سجل البكش — نظام تتبع أقفاص السمك</title>
+<meta name="description" content="نظام تتبع حركة أقفاص السمك (البكش) بين المخزن والمزارع والمبايع — يعمل بدون إنترنت.">
+
+<!-- تطبيق قابل للتثبيت -->
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0A2233">
+<link rel="icon" href="./favicon.png" sizes="32x32">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="سجل البكش">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- مكتبة تصدير PDF (تُخزَّن محليًا بعد أول تحميل) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- خطوط (يوجد بديل من خطوط النظام عند انقطاع الإنترنت) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ===================== الرموز التصميمية ===================== */
+:root{
+  --hull:#0A2233; --deep:#123B54; --tide:#0F6E8C; --wave:#2AA3C7;
+  --ice:#EDF3F7; --paper:#FFFFFF; --catch:#0E9E86; --rust:#C0492C;
+  --amber:#B9790A; --slate:#5A7386; --line:#D6E2EA;
+  --shadow:0 1px 2px rgba(10,34,51,.06), 0 6px 18px rgba(10,34,51,.06);
+  --r:14px;
+  --ff-ui:"IBM Plex Sans Arabic","Segoe UI",Tahoma,"Noto Sans Arabic",sans-serif;
+  --ff-dis:"Reem Kufi","IBM Plex Sans Arabic",Tahoma,sans-serif;
+  --ff-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--ff-ui); background:var(--ice); color:var(--hull);
+  -webkit-text-size-adjust:100%; line-height:1.55;
+  padding-bottom:calc(76px + env(safe-area-inset-bottom));
+}
+.num{direction:ltr; unicode-bidi:isolate; font-family:var(--ff-num); font-variant-numeric:tabular-nums}
+button,input,select,textarea{font-family:inherit;font-size:1rem}
+:focus-visible{outline:3px solid var(--wave); outline-offset:2px; border-radius:6px}
+h1,h2,h3{margin:0;font-family:var(--ff-dis);font-weight:600}
+
+header{background:linear-gradient(180deg,var(--hull),var(--deep));color:#fff;padding:14px 16px 36px;position:relative;overflow:hidden}
+header::after{content:"";position:absolute;inset-inline:0;bottom:0;height:10px;
+  background:repeating-linear-gradient(90deg,var(--wave) 0 14px,transparent 14px 22px);opacity:.55}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:38px;height:38px;border-radius:10px;flex:0 0 auto;background:repeating-linear-gradient(180deg,var(--wave) 0 5px,#0d4f68 5px 9px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
+.brand h1{font-size:1.22rem;line-height:1.2}
+.brand small{display:block;font-family:var(--ff-ui);font-weight:400;font-size:.72rem;opacity:.72}
+.hdr-right{margin-inline-start:auto;text-align:end;font-size:.72rem;opacity:.8}
+
+main{max-width:1080px;margin:0 auto;padding:16px 14px 24px}
+.view{display:none}
+.view.active{display:block;animation:rise .28s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.eyebrow{font-size:.7rem;font-weight:600;letter-spacing:.12em;color:var(--tide);margin:22px 0 8px;display:flex;align-items:center;gap:8px}
+.eyebrow::after{content:"";height:1px;flex:1;background:var(--line)}
+.view > .eyebrow:first-child{margin-top:4px}
+
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.pad{padding:14px}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(2,1fr)}
+@media(min-width:760px){.grid{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.stat::before{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:4px;background:var(--tide)}
+.stat.assets::before{background:var(--hull)}
+.stat.wh::before{background:var(--catch)}
+.stat.farm::before{background:var(--wave)}
+.stat.sale::before{background:var(--amber)}
+.stat .lbl{font-size:.78rem;color:var(--slate);font-weight:500}
+.stat .val{font-size:2rem;font-weight:700;line-height:1.15;margin-top:2px}
+.stat .sub{font-size:.74rem;color:var(--slate);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-inline-end:4px;vertical-align:1px}
+.dot.g{background:var(--catch)}.dot.d{background:var(--rust)}
+
+.manifest{margin-top:12px}
+.bar{display:flex;height:34px;border-radius:9px;overflow:hidden;border:1px solid var(--line);background:var(--ice)}
+.seg{position:relative;min-width:3px;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.28) 0 2px,transparent 2px 11px)}
+.seg.g{background-color:var(--catch)}.seg.d{background-color:var(--rust)}
+.seg.f{background-color:var(--wave)}.seg.s{background-color:var(--amber)}.seg.x{background-color:var(--slate)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:.75rem;color:var(--slate)}
+.legend b{color:var(--hull);font-family:var(--ff-num)}
+
+.tx{display:flex;gap:11px;padding:11px 13px;border-top:1px solid var(--line);align-items:flex-start}
+.tx:first-child{border-top:0}
+.tx .badge{flex:0 0 auto;width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-size:1.15rem;background:var(--ice);color:var(--tide)}
+.tx.in .badge{background:#E7F6F2;color:var(--catch)}
+.tx.out .badge{background:#E8F2F7;color:var(--tide)}
+.tx.warn .badge{background:#FBF0E4;color:var(--amber)}
+.tx.bad .badge{background:#FAEBE7;color:var(--rust)}
+.tx .body{min-width:0;flex:1}
+.tx .t1{font-weight:600;font-size:.92rem}
+.tx .t2{font-size:.78rem;color:var(--slate);margin-top:2px;word-break:break-word}
+.tx .qty{margin-inline-start:auto;text-align:end;font-weight:700;white-space:nowrap}
+.tx .qty small{display:block;font-weight:500;font-size:.7rem;color:var(--rust)}
+.tx .acts{display:flex;flex-direction:column;gap:6px;margin-inline-start:8px}
+.empty{padding:30px 18px;text-align:center;color:var(--slate)}
+.empty strong{display:block;color:var(--hull);font-family:var(--ff-dis);font-size:1.02rem;margin-bottom:4px}
+
+label{display:block;font-size:.8rem;font-weight:600;color:var(--deep);margin:12px 0 5px}
+input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#FBFDFE;color:var(--hull)}
+input[type=number]{direction:ltr;text-align:end;font-family:var(--ff-num)}
+input[type=date],input[type=datetime-local]{direction:ltr;text-align:end;font-family:var(--ff-num)}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 49%,var(--slate) 50%),linear-gradient(-45deg,transparent 49%,var(--slate) 50%);background-size:6px 6px;background-position:left 14px center,left 20px center;background-repeat:no-repeat;padding-inline-start:34px}
+.row{display:grid;gap:10px;grid-template-columns:1fr}
+@media(min-width:620px){.row.two{grid-template-columns:1fr 1fr}.row.three{grid-template-columns:1fr 1fr 1fr}}
+.hint{font-size:.75rem;color:var(--slate);margin-top:5px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:12px 16px;border-radius:11px;border:1px solid transparent;background:var(--tide);color:#fff;font-weight:600;cursor:pointer;transition:transform .12s ease,background .15s ease}
+.btn:active{transform:translateY(1px)}
+.btn:hover{background:#0c5c76}
+.btn.block{width:100%;margin-top:16px;padding:14px}
+.btn.ghost{background:transparent;color:var(--tide);border-color:var(--line)}
+.btn.ghost:hover{background:var(--ice)}
+.btn.danger{background:var(--rust)}.btn.danger:hover{background:#a53d23}
+.btn.sm{padding:8px 11px;font-size:.8rem;border-radius:9px}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* تبويب رئيسي (صادر / وارد / تحويلات / تسويات) */
+.tabs{display:flex;gap:5px;background:var(--paper);border:1px solid var(--line);border-radius:13px;padding:5px;box-shadow:var(--shadow);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:1 0 auto;white-space:nowrap;padding:10px 12px;border:0;background:none;border-radius:9px;font-weight:600;font-size:.86rem;color:var(--slate);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s ease,color .15s ease}
+.tabs button i{font-style:normal;font-size:1rem}
+.tabs button[aria-selected=true]{background:var(--tide);color:#fff}
+.tabs button[disabled]{opacity:.4;cursor:not-allowed}
+@media(max-width:400px){.tabs button{padding:10px 7px;font-size:.82rem;gap:4px} .tabs button i{display:none}}
+/* تبويب فرعي */
+.subtabs{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.subtabs button{padding:8px 13px;border-radius:99px;border:1px solid var(--line);background:var(--paper);font-size:.82rem;font-weight:600;color:var(--deep);cursor:pointer;display:flex;align-items:center;gap:6px}
+.subtabs button i{font-style:normal;color:var(--slate)}
+.subtabs button[aria-selected=true]{border-color:var(--tide);background:#EAF5F9;color:var(--tide);box-shadow:0 0 0 2px rgba(15,110,140,.14)}
+.subtabs button[aria-selected=true] i{color:var(--tide)}
+.subtabs button[disabled]{opacity:.4;cursor:not-allowed}
+
+/* صندوق الحساب الحي في نموذج الجرد والتسوية */
+.calcbox{margin-top:12px;padding:12px 13px;border-radius:11px;border:1px solid var(--line);background:var(--ice);font-size:.82rem;line-height:1.5}
+.calcbox b{font-family:var(--ff-num)}
+.calcbox .big{display:block;font-size:1.12rem;font-weight:700;font-family:var(--ff-dis);margin:4px 0 2px}
+.calcbox.bad{background:#FBEDE9;border-color:#EBC6BB;color:#8f3520}
+.calcbox.ok{background:#E9F7F3;border-color:#BCE3D8;color:#0a6f5e}
+.calcbox.up{background:#EAF5F9;border-color:#BEDCE8;color:#0c5c76}
+.editbar{background:#FBF0E4;border:1px solid #EBD3AC;border-radius:12px;padding:11px 13px;margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.editbar b{font-size:.87rem}
+.editbar .hint{margin:0}
+
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:.85rem;min-width:520px}
+th,td{padding:9px 10px;text-align:start;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:var(--ice);font-size:.75rem;color:var(--deep);font-weight:600;position:sticky;top:0}
+td.n{font-family:var(--ff-num);direction:ltr;text-align:end}
+td.wrap{white-space:normal;min-width:200px}
+tfoot td{font-weight:700;background:#F7FBFD;border-top:2px solid var(--line)}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.72rem;font-weight:600;background:var(--ice);color:var(--deep)}
+.pill.g{background:#E7F6F2;color:#0a6f5e}
+.pill.d{background:#FAEBE7;color:#8f3520}
+.pill.a{background:#FBF0E4;color:#8a5b06}
+
+nav{position:fixed;inset-inline:0;bottom:0;z-index:40;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+nav button{flex:1;background:none;border:0;padding:7px 2px;cursor:pointer;color:var(--slate);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.7rem;font-weight:600;border-radius:10px}
+nav button i{font-style:normal;font-size:1.25rem;line-height:1}
+nav button[aria-current=page]{color:var(--tide)}
+@media(min-width:960px){
+  body{padding-bottom:0;padding-inline-start:210px}
+  nav{inset:0 auto 0 0;width:210px;flex-direction:column;justify-content:flex-start;border-top:0;border-inline-end:1px solid var(--line);padding:16px 10px;gap:4px;background:var(--paper)}
+  nav button{flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:11px;font-size:.9rem;padding:11px 12px;width:100%}
+  nav button[aria-current=page]{background:var(--ice)}
+  header{padding-inline-start:226px}
+  main{padding-inline:22px}
+}
+
+.modal{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:rgba(10,34,51,.55);padding:16px}
+.modal.open{display:grid}
+.modal .card{width:100%;max-width:460px;max-height:88vh;overflow:auto}
+#toast{position:fixed;inset-inline:0;bottom:calc(88px + env(safe-area-inset-bottom));z-index:80;display:flex;justify-content:center;pointer-events:none;padding:0 14px}
+#toast div{background:var(--hull);color:#fff;padding:11px 16px;border-radius:11px;font-size:.85rem;font-weight:500;box-shadow:0 8px 24px rgba(10,34,51,.3);max-width:520px;transform:translateY(14px);opacity:0;transition:.25s}
+#toast div.show{transform:none;opacity:1}
+#toast div.err{background:var(--rust)}
+@media(min-width:960px){#toast{bottom:24px;padding-inline-start:226px}}
+
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media print{nav,header,.no-print{display:none!important} body{background:#fff;padding:0} .card{box-shadow:none}}
+.report-sheet{background:#fff}
+.report-sheet .rh{padding:14px;border-bottom:1px solid var(--line)}
+.report-sheet .rh h3{font-size:1.05rem}
+.report-sheet .rh p{margin:3px 0 0;font-size:.78rem;color:var(--slate)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="mark" aria-hidden="true"></div>
+    <div>
+      <h1>سجل البكش</h1>
+      <small>تتبع أقفاص السمك — يعمل بدون إنترنت</small>
+    </div>
+    <div class="hdr-right">
+      <div id="hdrDate"></div>
+      <div id="hdrCount" class="num"></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ==================== الرئيسية ==================== -->
+  <section id="view-home" class="view active">
+    <div class="eyebrow">ملخص اليوم</div>
+    <div class="grid">
+      <div class="stat assets"><div class="lbl">إجمالي الأصول</div><div class="val num" id="s-assets">0</div><div class="sub">كل البكش المملوك</div></div>
+      <div class="stat wh"><div class="lbl">رصيد المخزن</div><div class="val num" id="s-wh">0</div>
+        <div class="sub"><span><i class="dot g"></i>سليم <b class="num" id="s-wh-g">0</b></span><span><i class="dot d"></i>تالف <b class="num" id="s-wh-d">0</b></span></div></div>
+      <div class="stat farm"><div class="lbl">إجمالي عهدة المزارع</div><div class="val num" id="s-farm">0</div><div class="sub" id="s-farm-n"></div></div>
+      <div class="stat sale"><div class="lbl">إجمالي عهدة المبايع</div><div class="val num" id="s-sale">0</div><div class="sub" id="s-sale-n"></div></div>
+    </div>
+
+    <div class="eyebrow">توزيع الأصول</div>
+    <div class="card pad manifest">
+      <div class="bar" id="assetBar" role="img" aria-label="توزيع البكش على المواقع"></div>
+      <div class="legend" id="assetLegend"></div>
+    </div>
+
+    <div class="eyebrow">آخر ١٠ حركات</div>
+    <div class="card" id="recentList"></div>
+  </section>
+
+  <!-- ==================== العمليات ==================== -->
+  <section id="view-ops" class="view">
+    <div id="editBar"></div>
+    <div class="eyebrow">اختر العملية</div>
+    <div class="tabs" id="opGroups" role="tablist" aria-label="مجموعات العمليات"></div>
+    <div class="subtabs" id="opSubs" role="tablist" aria-label="نوع العملية"></div>
+    <div class="eyebrow" id="opTitle">تفاصيل العملية</div>
+    <div class="card pad"><form id="opForm" autocomplete="off"></form></div>
+  </section>
+
+  <!-- ==================== التقارير ==================== -->
+  <section id="view-reports" class="view">
+    <div class="eyebrow">التقارير</div>
+    <div class="subtabs" id="repPick" role="tablist" aria-label="التقارير"></div>
+    <div class="btnrow no-print">
+      <button class="btn ghost sm" id="btnPdf">تصدير PDF</button>
+      <button class="btn ghost sm" onclick="window.print()">طباعة</button>
+    </div>
+    <div id="repControls" class="card pad no-print" style="margin-top:12px;display:none"></div>
+    <div class="card report-sheet" id="repSheet" style="margin-top:12px"></div>
+  </section>
+
+  <!-- ==================== البيانات ==================== -->
+  <section id="view-data" class="view">
+    <div class="eyebrow">المخزن</div>
+    <div class="card pad">
+      <label for="whName">اسم المخزن</label>
+      <input id="whName" type="text">
+      <div class="row two">
+        <div><label for="whInit">الرصيد الافتتاحي — سليم</label><input id="whInit" type="number" step="1"></div>
+        <div><label for="whInitDmg">الرصيد الافتتاحي — تالف</label><input id="whInitDmg" type="number" step="1"></div>
+      </div>
+      <div class="hint">عدد البكش الموجود بالمخزن قبل تسجيل أي حركة، مقسومًا على السليم والتالف. التالف الافتتاحي يدخل ضمن ما يمكن إرساله للمصنع.</div>
+      <button class="btn block" id="btnSaveWh">حفظ بيانات المخزن</button>
+    </div>
+
+    <div class="eyebrow">المزارع والمبايع والسائقون</div>
+    <div class="btnrow" style="margin-top:0">
+      <button class="btn sm" data-add="farm">إضافة مزرعة</button>
+      <button class="btn sm" data-add="sales">إضافة مبيع</button>
+      <button class="btn sm" data-add="driver">إضافة سائق</button>
+    </div>
+    <div class="card" id="entityList" style="margin-top:12px"></div>
+
+    <div class="eyebrow">تثبيت التطبيق</div>
+    <div class="card pad">
+      <p class="hint" style="margin-top:0">ثبّت التطبيق على شاشة الهاتف ليفتح كأي تطبيق ويعمل بدون إنترنت.</p>
+      <div class="btnrow"><button class="btn" id="btnInstall" hidden>تثبيت على الجهاز</button></div>
+      <p class="hint" id="installHint">في كروم: زر القائمة ⋮ ← «تثبيت التطبيق». في آيفون: زر المشاركة ← «إضافة إلى الشاشة الرئيسية».</p>
+    </div>
+
+    <div class="eyebrow">نسخة احتياطية</div>
+    <div class="card pad">
+      <p class="hint" style="margin-top:0">البيانات محفوظة داخل هذا المتصفح فقط. خُذ نسخة احتياطية بانتظام واحفظها خارج الجهاز.</p>
+      <div class="btnrow">
+        <button class="btn" id="btnBackup">تنزيل نسخة احتياطية</button>
+        <button class="btn ghost" id="btnRestore">استعادة من ملف</button>
+        <button class="btn ghost" id="btnWipe" style="color:var(--rust);border-color:#f0d3cc">حذف كل البيانات</button>
+      </div>
+      <input type="file" id="fileInput" accept=".json,application/json" hidden>
+      <p class="hint" id="verLine"></p>
+    </div>
+  </section>
+</main>
+
+<nav aria-label="التنقل الرئيسي">
+  <button data-go="home" aria-current="page"><i>▦</i>الرئيسية</button>
+  <button data-go="ops"><i>⇄</i>العمليات</button>
+  <button data-go="reports"><i>▤</i>التقارير</button>
+  <button data-go="data"><i>⚙</i>البيانات</button>
+</nav>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="card pad">
+    <h3 id="modalTitle">إضافة</h3>
+    <form id="entityForm">
+      <input type="hidden" id="e-id"><input type="hidden" id="e-type">
+      <label for="e-name">الاسم</label>
+      <input id="e-name" type="text" required maxlength="60">
+      <div id="e-balwrap">
+        <label for="e-init">الرصيد الافتتاحي (بكش)</label>
+        <input id="e-init" type="number" step="1" value="0">
+        <div class="hint" id="e-balhint"></div>
+      </div>
+      <label for="e-note">ملاحظة (اختياري)</label>
+      <input id="e-note" type="text" maxlength="80">
+      <div class="btnrow">
+        <button type="submit" class="btn">حفظ</button>
+        <button type="button" class="btn ghost" id="modalCancel">إلغاء</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast" aria-live="polite"></div>
+
+<script>
+/* =====================================================================
+   سجل البكش — منطق التطبيق
+   ---------------------------------------------------------------------
+   المبدأ: لا نخزّن أي رصيد كرقم ثابت. نخزّن "دفتر حركات" (Ledger)
+   ونحسب كل رصيد من مجموع الحركات في كل مرة، فيبقى كل رقم قابلًا
+   للتفسير من تاريخه ولا يمكن أن يتعارض مع الدفتر.
+
+   قاعدة الحساب لأي جهة (مزرعة / مبيع / مصنع):
+       الرصيد = الرصيد الافتتاحي
+              + مجموع (سليم + تالف) لكل حركة إليه  (to = id)
+              − مجموع (سليم + تالف) لكل حركة منه   (from = id)
+
+   المخزن حالة خاصة: نفصل السليم عن التالف لأن التالف يُرسل للمصنع.
+       سليم = افتتاحي سليم + توريد راجع(سليم) + شراء + بديل من المصنع − صرف
+       تالف = افتتاحي تالف + توريد راجع(تالف) − إرسال تالف للمصنع
+
+   إجمالي الأصول = سليم المخزن + تالف المخزن + المزارع + المبايع + المصنع
+       يزيد بـ: الشراء الجديد، وزيادة الجرد.
+       ينقص بـ: الفاقد الناتج عن الجرد والتسوية.
+       باقي العمليات نقل داخلي: لا تغيّر الإجمالي.
+
+   الجرد والتسوية (settle): عملية واحدة للمزرعة والمبيع معًا، ترجّع
+   البكش من الجهة إلى المخزن سليمًا وتالفًا، وتحسب الفاقد بالفرق:
+       الفاقد = الرصيد الدفتري − (الراجع سليم + تالف) − المتبقي عند الجهة
+   الفاقد يخرج من الجهة ولا يدخل المخزن، فينقص إجمالي الأصول بمقداره،
+   ولهذا يُطلب تأكيد صريح من المستخدم قبل تسجيله.
+   قيمة سالبة للفاقد تعني زيادة جرد تُضاف للعهدة وللأصول.
+
+   التعديل والحذف: لا يُمحى شيء بصمت. كل تعديل أو حذف يُسجَّل في
+   سجل التغييرات (audit) بالقيم قبل وبعد وسبب التغيير.
+   ===================================================================== */
+
+const KEY='baksha.ledger.v1', WH='WH', FAC='FAC', APP_VER='2.0';
+
+let db = load();
+
+function seed(){
+  return {
+    entities:[
+      {id:WH, name:'المخزن الرئيسي', type:'warehouse', init:0, initDmg:0, note:''},
+      {id:FAC,name:'المصنع',        type:'factory',   init:0, note:'استبدال التالف'}
+    ],
+    txs:[], audit:[], meta:{created:Date.now(), version:2}
+  };
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(!raw) return seed();
+    const d = JSON.parse(raw);
+    if(!d || !Array.isArray(d.entities) || !Array.isArray(d.txs)) return seed();
+    if(!Array.isArray(d.audit)) d.audit=[];              // ترقية من الإصدار الأول
+    if(!d.meta) d.meta={created:Date.now()};
+    d.meta.version=2;
+    if(!d.entities.find(e=>e.id===WH))  d.entities.unshift({id:WH,name:'المخزن الرئيسي',type:'warehouse',init:0,initDmg:0,note:''});
+    if(!d.entities.find(e=>e.id===FAC)) d.entities.push({id:FAC,name:'المصنع',type:'factory',init:0,note:''});
+    const w=d.entities.find(e=>e.id===WH);
+    if(w.initDmg==null) w.initDmg=0;                     // ترقية: فصل التالف الافتتاحي
+    return d;
+  }catch(err){ return seed(); }
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch(err){ toast('لم يُحفظ التغيير: مساحة التخزين ممتلئة. نزّل نسخة احتياطية ثم احذف بيانات قديمة.', true); }
+}
+
+/* ------------------------- أدوات ------------------------- */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const n=v=>Number(v)||0;
+const fmt=v=>(v<0?'−':'')+Math.abs(Math.round(v)).toLocaleString('en-US');
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ent=id=>db.entities.find(e=>e.id===id);
+const nameOf=id=>id?(ent(id)?.name||'—'):'—';
+const byType=(...t)=>db.entities.filter(e=>t.includes(e.type)).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+
+const AR_DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const d2=x=>String(x).padStart(2,'0');
+const dateKey=ts=>{const d=new Date(ts);return `${d.getFullYear()}-${d2(d.getMonth()+1)}-${d2(d.getDate())}`};
+const fmtDT=ts=>{const d=new Date(ts);return `${dateKey(ts)} · ${d2(d.getHours())}:${d2(d.getMinutes())}`};
+const fmtLong=ts=>`${AR_DAYS[new Date(ts).getDay()]} ${dateKey(ts)}`;
+const toInput=ts=>{const d=new Date(ts);return `${dateKey(ts)}T${d2(d.getHours())}:${d2(d.getMinutes())}`};
+const fromInput=s=>{const t=new Date(s).getTime(); return isNaN(t)?Date.now():t};
+
+let toastTimer;
+function toast(msg,isErr){
+  const box=$('#toast'); box.innerHTML='';
+  const el=document.createElement('div');
+  el.textContent=msg; if(isErr) el.className='err';
+  box.appendChild(el);
+  requestAnimationFrame(()=>el.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{el.classList.remove('show');setTimeout(()=>box.innerHTML='',300)},4200);
+}
+
+/* ============ أنواع الحركات ============ */
+const TX={
+  outbound:{ar:'صرف من المخزن',icon:'↗',cls:'out',hint:'مخزن ← مزرعة أو مبيع'},
+  sale:    {ar:'بيع سمك',icon:'⇢',cls:'out',hint:'مزرعة ← مبيع'},
+  empty:   {ar:'تحويل فارغ',icon:'⇠',cls:'out',hint:'مبيع ← مزرعة'},
+  inbound: {ar:'توريد راجع للمخزن',icon:'↙',cls:'in',hint:'مبيع ← المخزن'},
+  settle:  {ar:'جرد وتسوية',icon:'⊜',cls:'warn',hint:'مزرعة أو مبيع ← المخزن'},
+  dmg_out: {ar:'إرسال تالف للمصنع',icon:'⊗',cls:'bad',hint:'مخزن ← المصنع'},
+  dmg_in:  {ar:'استلام بديل من المصنع',icon:'⊕',cls:'in',hint:'المصنع ← المخزن'},
+  purchase:{ar:'شراء بكش جديد',icon:'✚',cls:'in',hint:'إضافة للمخزن'},
+  dsettle: {ar:'تصفية حساب سائق',icon:'✓',cls:'warn',hint:'تصفير غرامة الإهمال'},
+  // أنواع قديمة تُعرض في السجل ولا تُنشأ من جديد
+  count:   {ar:'جرد (صيغة قديمة)',icon:'⊜',cls:'warn',hint:''},
+  loss:    {ar:'تسوية فاقد (صيغة قديمة)',icon:'✖',cls:'bad',hint:''}
+};
+const REASONS={negligence:'إهمال سائق', natural:'إهلاك طبيعي', farm_wear:'إهلاك بالمزرعة'};
+
+/* ============ حسابات الدفتر ============ */
+const vol=t=>n(t.good)+n(t.damaged);   // ما ينتقل فعليًا من جهة إلى أخرى
+const outQ=t=>vol(t)+n(t.lost);        // ما يخرج من الجهة المرسلة: المنتقل + الفاقد (الفاقد يخرج من النظام كله)
+const rows=(skip)=>skip?db.txs.filter(t=>t.id!==skip):db.txs;
+
+function whBalance(skip){
+  // المخزن يبدأ برصيدين افتتاحيين منفصلين: سليم وتالف
+  let good=n(ent(WH)?.init), dmg=n(ent(WH)?.initDmg);
+  for(const t of rows(skip)){
+    if(t.type==='outbound')      good-=n(t.good);
+    else if(t.type==='inbound'||t.type==='settle'){ good+=n(t.good); dmg+=n(t.damaged); }
+    else if(t.type==='purchase') good+=n(t.good);
+    else if(t.type==='dmg_in')   good+=n(t.good);
+    else if(t.type==='dmg_out')  dmg -=n(t.damaged);
+  }
+  return {good,dmg,total:good+dmg};
+}
+function balanceOf(id,skip){
+  if(id===WH) return whBalance(skip).total;
+  let b=n(ent(id)?.init);
+  for(const t of rows(skip)){
+    if(t.to===id)   b+=vol(t);
+    if(t.from===id) b-=outQ(t);
+  }
+  return b;
+}
+function totals(){
+  const w=whBalance();
+  const farms=byType('farm').reduce((s,e)=>s+balanceOf(e.id),0);
+  const sales=byType('sales').reduce((s,e)=>s+balanceOf(e.id),0);
+  const fac=balanceOf(FAC);
+  return {w,farms,sales,fac,assets:w.total+farms+sales+fac};
+}
+function driverStats(id){
+  let negl=0,nat=0,cleared=0,trips=0;
+  for(const t of db.txs){
+    if(t.driver===id && t.type!=='dsettle') trips++;
+    // التالف الراجع من المزرعة لا يُحتسب على السائق — المبايع فقط
+    if((t.type==='inbound'||t.type==='settle') && t.driver===id && ent(t.from)?.type==='sales'){
+      if(t.reason==='negligence') negl+=n(t.damaged);
+      if(t.reason==='natural')    nat +=n(t.damaged);
+    }
+    if(t.type==='dsettle' && t.driver===id) cleared+=n(t.cleared);
+  }
+  return {negl,nat,cleared,open:negl-cleared,trips};
+}
+const blank={good:0,damaged:0,lost:0,remain:null,from:null,to:null,driver:null,reason:null,note:'',counted:null,cleared:0};
+function addTx(o){
+  db.txs.push(Object.assign({id:uid(),ts:Date.now()},blank,o));
+  save(); renderAll();
+}
+function logAudit(action,before,after,reason){
+  db.audit.push({id:uid(),ts:Date.now(),action,txId:before.id,txType:before.type,
+                 before:JSON.parse(JSON.stringify(before)), after:after?JSON.parse(JSON.stringify(after)):null, reason:reason||''});
+}
+function txSummary(t){
+  if(!t) return '—';
+  const m=TX[t.type]||{ar:t.type};
+  if(t.type==='dsettle') return `${m.ar} · ${nameOf(t.driver)} · ${fmt(t.cleared)}`;
+  if(t.type==='count')   return `${m.ar} · ${nameOf(t.from||t.to)} · معدود ${fmt(t.counted)}`;
+  const g=n(t.good), d=n(t.damaged), l=n(t.lost);
+  return `${m.ar} · ${nameOf(t.from)}←${nameOf(t.to)} · سليم ${fmt(g)}${d?` تالف ${fmt(d)}`:''}${l?` فاقد ${fmt(l)}`:''} · ${fmtDT(t.ts)}`;
+}
+
+/* ============ التنقل ============ */
+function go(view){
+  $$('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
+  $$('nav button').forEach(b=>b.dataset.go===view?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
+  window.scrollTo({top:0});
+}
+$$('nav button').forEach(b=>b.onclick=()=>go(b.dataset.go));
+
+/* ============ الرئيسية ============ */
+function renderHome(){
+  const t=totals();
+  $('#s-assets').textContent=fmt(t.assets);
+  $('#s-wh').textContent=fmt(t.w.total);
+  $('#s-wh-g').textContent=fmt(t.w.good);
+  $('#s-wh-d').textContent=fmt(t.w.dmg);
+  $('#s-farm').textContent=fmt(t.farms);
+  $('#s-sale').textContent=fmt(t.sales);
+  $('#s-farm-n').textContent=`${byType('farm').length} مزرعة مسجّلة`;
+  $('#s-sale-n').textContent=`${byType('sales').length} مبيع مسجّل`;
+
+  const parts=[
+    {k:'g',c:'catch',l:'سليم بالمخزن',v:Math.max(0,t.w.good)},
+    {k:'d',c:'rust', l:'تالف بالمخزن',v:Math.max(0,t.w.dmg)},
+    {k:'f',c:'wave', l:'عهدة المزارع',v:Math.max(0,t.farms)},
+    {k:'s',c:'amber',l:'عهدة المبايع',v:Math.max(0,t.sales)},
+    {k:'x',c:'slate',l:'بالمصنع',      v:Math.max(0,t.fac)}
+  ];
+  const sum=parts.reduce((s,p)=>s+p.v,0);
+  $('#assetBar').innerHTML = sum ? parts.filter(p=>p.v>0).map(p=>`<div class="seg ${p.k}" style="flex:${p.v}" title="${p.l}"></div>`).join('')
+                                 : '<div class="seg x" style="flex:1;opacity:.25"></div>';
+  $('#assetLegend').innerHTML = parts.map(p=>`<span><i class="dot" style="background:var(--${p.c})"></i>${p.l} <b>${fmt(p.v)}</b>${sum?` · ${Math.round(p.v/sum*100)}%`:''}</span>`).join('');
+
+  const recent=[...db.txs].sort((a,b)=>b.ts-a.ts).slice(0,10);
+  $('#recentList').innerHTML = recent.length ? recent.map(t=>txRow(t,true)).join('')
+    : `<div class="empty"><strong>الدفتر فارغ</strong>ابدأ من تبويب العمليات لتسجيل أول حركة.</div>`;
+  bindRowActions();
+
+  $('#hdrDate').textContent=fmtLong(Date.now());
+  $('#hdrCount').textContent=`${db.txs.length} حركة`;
+}
+
+function txRow(t,acts){
+  const m=TX[t.type]||{ar:t.type,icon:'•',cls:''};
+  let l2;
+  if(t.type==='purchase')     l2=`إلى ${esc(nameOf(WH))}${t.note?' · '+esc(t.note):''}`;
+  else if(t.type==='loss')    l2=`خصم من ${esc(nameOf(t.from))}${t.note?' · '+esc(t.note):''}`;
+  else if(t.type==='dsettle') l2=`السائق ${esc(nameOf(t.driver))} · تصفية ${fmt(t.cleared)} بكش`;
+  else if(t.type==='settle'){
+    l2=`${esc(nameOf(t.from))} ← ${esc(nameOf(WH))} · سليم ${fmt(t.good)} · تالف ${fmt(t.damaged)} · متبقٍ ${fmt(t.remain)}`+
+       (n(t.lost)>0?` · <b style="color:var(--rust)">فاقد ${fmt(t.lost)}</b>`:n(t.lost)<0?` · زيادة ${fmt(-t.lost)}`:'');
+  }
+  else if(t.type==='count'){
+    const diff=(t.to?vol(t):-vol(t));
+    l2=`${esc(nameOf(t.from||t.to))} · المعدود ${fmt(t.counted)} · الفرق ${diff>0?'+':''}${fmt(diff)}`;
+  }
+  else l2=`${esc(nameOf(t.from))} ← ${esc(nameOf(t.to))}${t.driver?' · السائق '+esc(nameOf(t.driver)):''}`;
+  const q=t.type==='dsettle'?n(t.cleared):vol(t);
+  return `<div class="tx ${m.cls}">
+    <div class="badge" aria-hidden="true">${m.icon}</div>
+    <div class="body">
+      <div class="t1">${m.ar}</div>
+      <div class="t2">${l2} · <span class="num">${fmtDT(t.ts)}</span></div>
+    </div>
+    <div class="qty"><span class="num">${fmt(q)}</span>${n(t.damaged)&&t.type!=='dmg_out'?`<small>تالف ${fmt(t.damaged)} · ${REASONS[t.reason]||''}</small>`:''}</div>
+    ${acts?`<div class="acts no-print">
+       <button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
+       <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button>
+     </div>`:''}
+  </div>`;
+}
+function bindRowActions(){
+  $$('[data-edittx]').forEach(b=>b.onclick=()=>startEdit(b.dataset.edittx));
+  $$('[data-deltx]').forEach(b=>b.onclick=()=>voidTx(b.dataset.deltx));
+}
+
+/* ============ العمليات ============ */
+/* العمليات مجمّعة في أربعة تبويبات رئيسية، يتفرع من كل واحد تبويب فرعي.
+   التجميع بحسب أثر الحركة على المخزن: صادر منه، وارد إليه، حركة لا تمر به، أو تسوية. */
+const GROUPS=[
+  {k:'out',  ar:'صادر',    icon:'↗', sub:['outbound','dmg_out']},
+  {k:'in',   ar:'وارد',    icon:'↙', sub:['inbound','dmg_in','purchase']},
+  {k:'move', ar:'تحويلات', icon:'⇄', sub:['sale','empty']},
+  {k:'adj',  ar:'تسويات',  icon:'⊜', sub:['settle']}
+];
+const SHORT={outbound:'صرف عهدة',dmg_out:'تالف للمصنع',inbound:'توريد راجع',dmg_in:'بديل من المصنع',
+             purchase:'شراء جديد',sale:'بيع سمك',empty:'تحويل فارغ',settle:'جرد وتسوية'};
+const groupOf=op=>GROUPS.find(g=>g.sub.includes(op))||GROUPS[0];
+let curOp='outbound', editing=null;
+
+function renderOpsPick(){
+  const g=groupOf(curOp);
+  $('#opGroups').innerHTML=GROUPS.map(x=>
+    `<button type="button" role="tab" data-grp="${x.k}" aria-selected="${x.k===g.k}" ${editing?'disabled':''}>
+       <i aria-hidden="true">${x.icon}</i>${x.ar}</button>`).join('');
+  $('#opSubs').hidden = g.sub.length<2;   // لا تبويب فرعي لمجموعة بعملية واحدة
+  $('#opSubs').innerHTML=g.sub.map(k=>
+    `<button type="button" role="tab" data-op="${k}" aria-selected="${k===curOp}" ${editing&&editing.type!==k?'disabled':''}>
+       <i aria-hidden="true">${TX[k].icon}</i>${SHORT[k]}</button>`).join('');
+  $$('#opGroups button').forEach(b=>b.onclick=()=>{
+    if(editing) return;
+    curOp=GROUPS.find(x=>x.k===b.dataset.grp).sub[0];
+    renderOpsPick(); renderOpForm();
+  });
+  $$('#opSubs button').forEach(b=>b.onclick=()=>{
+    if(editing) return;
+    curOp=b.dataset.op; renderOpsPick(); renderOpForm();
+  });
+
+  $('#editBar').innerHTML = editing
+    ? `<div class="editbar"><b>وضع التعديل</b>
+        <span class="hint">تعدّل حركة مسجّلة يوم <span class="num">${fmtDT(editing.ts)}</span>. سيُحفظ التغيير في سجل التغييرات.</span>
+        <button class="btn ghost sm" id="btnCancelEdit">إلغاء التعديل</button></div>` : '';
+  if(editing) $('#btnCancelEdit').onclick=()=>{editing=null;renderOpsPick();renderOpForm();toast('أُلغي وضع التعديل.');};
+}
+
+const V=(f,d)=>editing&&editing[f]!=null&&editing[f]!==''?editing[f]:d;
+function opts(list,ph,sel){
+  if(!list.length) return `<option value="">— لا يوجد سجل —</option>`;
+  return `<option value="">${ph}</option>`+list.map(e=>
+    `<option value="${e.id}" ${e.id===sel?'selected':''}>${esc(e.name)} (${fmt(balanceOf(e.id))})</option>`).join('');
+}
+function driverSel(req,sel){
+  const d=byType('driver');
+  return `<label for="f-driver">السائق${req?'':' (اختياري)'}</label>
+   <select id="f-driver" ${req?'required':''}>${d.length?`<option value="">اختر السائق</option>`+d.map(e=>`<option value="${e.id}" ${e.id===sel?'selected':''}>${esc(e.name)}</option>`).join(''):`<option value="">— أضف سائقًا من تبويب البيانات —</option>`}</select>`;
+}
+const qtyF=(id,lbl,val)=>`<label for="${id}">${lbl}</label><input id="${id}" type="number" min="0" step="1" value="${val??''}" inputmode="numeric">`;
+const whenF=()=>`<label for="f-when">وقت الحركة</label><input id="f-when" type="datetime-local" value="${toInput(editing?editing.ts:Date.now())}">
+  <div class="hint">اضبطه على وقت الحركة الفعلي إن كنت تسجّلها لاحقًا.</div>`;
+/* سبب التلف يظهر للمبايع فقط، لأن التالف الراجع من المزرعة لا يُحتسب على السائق */
+const reasonF=()=>`<div id="reasonWrap" hidden><label for="f-reason">سبب التلف</label>
+    <select id="f-reason">
+      <option value="negligence" ${V('reason')==='negligence'?'selected':''}>إهمال سائق</option>
+      <option value="natural" ${V('reason')==='natural'?'selected':''}>إهلاك طبيعي</option>
+    </select>
+    <div class="hint">«إهمال سائق» يُسجَّل في لوحة مخاطر السائقين.</div></div>
+  <div class="hint" id="farmDmgNote" hidden>التالف الراجع من المزرعة يُسجَّل «إهلاك بالمزرعة» ولا يُحتسب على السائق.</div>`;
+function syncReason(){
+  const rw=$('#reasonWrap'); if(!rw) return;
+  const isSales=ent($('#f-from')?.value)?.type==='sales', hasDmg=n($('#f-damaged')?.value)>0;
+  rw.hidden=!(hasDmg&&isSales);
+  $('#farmDmgNote').hidden=!(hasDmg&&!isSales);
+}
+const reasonVal=from=>ent(from)?.type==='sales' ? ($('#f-reason')?.value||'natural') : 'farm_wear';
+
+function renderOpForm(){
+  const f=$('#opForm'), w=whBalance(editing?.id);
+  $('#opTitle').textContent=(editing?'تعديل: ':'')+TX[curOp].ar+' — '+TX[curOp].hint;
+  let h='';
+
+  if(curOp==='outbound'){
+    h=`<div class="hint">المتاح للصرف الآن: <b class="num">${fmt(w.good)}</b> بكش سليم.</div>
+      <label for="f-to">الجهة المستلمة</label><select id="f-to" required>${opts(byType('farm','sales'),'اختر مزرعة أو مبيع',V('to'))}</select>
+      ${qtyF('f-good','عدد البكش السليم',V('good'))}${driverSel(true,V('driver'))}`;
+  }
+  else if(curOp==='sale'){
+    h=`<label for="f-from">المزرعة</label><select id="f-from" required>${opts(byType('farm'),'اختر المزرعة',V('from'))}</select>
+      <label for="f-to">المبيع</label><select id="f-to" required>${opts(byType('sales'),'اختر المبيع',V('to'))}</select>
+      ${qtyF('f-good','عدد البكش',V('good'))}${driverSel(true,V('driver'))}`;
+  }
+  else if(curOp==='empty'){
+    h=`<label for="f-from">المبيع</label><select id="f-from" required>${opts(byType('sales'),'اختر المبيع',V('from'))}</select>
+      <label for="f-to">المزرعة</label><select id="f-to" required>${opts(byType('farm'),'اختر المزرعة',V('to'))}</select>
+      ${qtyF('f-good','عدد البكش الفارغ',V('good'))}${driverSel(true,V('driver'))}`;
+  }
+  else if(curOp==='inbound'){
+    h=`<label for="f-from">الجهة المورِّدة</label><select id="f-from" required>${opts(byType('farm','sales'),'اختر مزرعة أو مبيع',V('from'))}</select>
+      <div class="row two"><div>${qtyF('f-good','سليم',V('good'))}</div><div>${qtyF('f-damaged','تالف',n(V('damaged',0)))}</div></div>
+      ${reasonF()}
+      ${driverSel(true,V('driver'))}`;
+  }
+  else if(curOp==='settle'){
+    h=`<div class="hint">أدخل الراجع للمخزن والمتبقي عند الجهة بعد العد، ويحسب التطبيق الفاقد وينبّهك به.</div>
+      <label for="f-from">الجهة</label><select id="f-from" required>${opts(byType('farm','sales'),'اختر مزرعة أو مبيع',V('from'))}</select>
+      <div class="row two">
+        <div>${qtyF('f-good','راجع للمخزن — سليم',n(V('good',0)))}</div>
+        <div>${qtyF('f-damaged','راجع للمخزن — تالف',n(V('damaged',0)))}</div>
+      </div>
+      ${reasonF()}
+      ${qtyF('f-remain','المتبقي عند الجهة بعد العد',V('remain'))}
+      <div class="hint">اكتب 0 إذا صُفّيت العهدة بالكامل.</div>
+      <div class="calcbox" id="settleInfo">اختر الجهة أولًا.</div>
+      ${driverSel(false,V('driver'))}
+      <label for="f-note">سبب الفاقد / ملاحظة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}" placeholder="اسم الجارد، سبب النقص، ...">`;
+  }
+  else if(curOp==='dmg_out'){
+    h=`<div class="hint">التالف المتاح بالمخزن: <b class="num">${fmt(w.dmg)}</b> بكش.</div>
+      ${qtyF('f-damaged','عدد البكش التالف المرسل',V('damaged'))}${driverSel(false,V('driver'))}
+      <label for="f-note">ملاحظة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}" placeholder="رقم إذن الإرسال مثلًا">`;
+  }
+  else if(curOp==='dmg_in'){
+    h=`<div class="hint">يُضاف البديل إلى رصيد المخزن السليم.</div>
+      ${qtyF('f-good','عدد البكش السليم المستلم',V('good'))}${driverSel(false,V('driver'))}
+      <label for="f-note">ملاحظة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}">`;
+  }
+  else if(curOp==='purchase'){
+    h=`<div class="hint">الشراء يرفع إجمالي الأصول.</div>
+      ${qtyF('f-good','عدد البكش المشترى',V('good'))}
+      <label for="f-note">المورِّد / رقم الفاتورة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}">`;
+  }
+  f.innerHTML=h+whenF()+`<button type="submit" class="btn block">${editing?'حفظ التعديل':'تسجيل '+TX[curOp].ar}</button>`;
+
+  if(curOp==='inbound'||curOp==='settle'){
+    $('#f-damaged').addEventListener('input',syncReason);
+    $('#f-from').addEventListener('change',syncReason);
+    syncReason();
+  }
+  if(curOp==='settle'){
+    const u=()=>updateSettle();
+    ['#f-from','#f-good','#f-damaged','#f-remain'].forEach(s=>$(s).addEventListener('input',u));
+    $('#f-from').addEventListener('change',u); u();
+  }
+}
+/* الفاقد = الرصيد الدفتري − (الراجع للمخزن) − (المتبقي عند الجهة).
+   موجب = عجز يُخصم من الأصول، سالب = زيادة تُضاف إليها. */
+function settleCalc(){
+  const id=$('#f-from')?.value;
+  if(!id) return null;
+  const bal=balanceOf(id,editing?.id);
+  const back=n($('#f-good').value)+n($('#f-damaged').value);
+  const rem=$('#f-remain').value;
+  return {id,bal,back,rem,lost: rem===''?null:bal-back-n(rem)};
+}
+function updateSettle(){
+  const box=$('#settleInfo'), c=settleCalc();
+  box.className='calcbox';
+  if(!c){ box.textContent='اختر الجهة أولًا.'; return; }
+  const head=`عهدة ${esc(nameOf(c.id))} دفتريًا <b class="num">${fmt(c.bal)}</b> · راجع للمخزن <b class="num">${fmt(c.back)}</b>`;
+  if(c.lost===null){ box.innerHTML=head+` · <span style="color:var(--slate)">أدخل المتبقي لحساب الفاقد</span>`; return; }
+  if(c.lost>0){ box.classList.add('bad');
+    box.innerHTML=head+`<span class="big">⚠ الفاقد ${fmt(c.lost)} بكش</span>سيُخصم نهائيًا من عهدة الجهة ومن إجمالي الأصول.`; }
+  else if(c.lost<0){ box.classList.add('up');
+    box.innerHTML=head+`<span class="big">زيادة جرد ${fmt(-c.lost)} بكش</span>ستُضاف إلى عهدة الجهة وإلى إجمالي الأصول.`; }
+  else { box.classList.add('ok');
+    box.innerHTML=head+`<span class="big">مطابق تمامًا</span>لا فاقد ولا زيادة.`; }
+}
+
+$('#opForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const g=id=>$(id)?$(id).value:'';
+  const good=n(g('#f-good')), dmg=n(g('#f-damaged'));
+  const from=g('#f-from')||null, to=g('#f-to')||null, driver=g('#f-driver')||null;
+  const note=(g('#f-note')||'').trim(), ts=fromInput(g('#f-when'));
+  const w=whBalance(editing?.id);
+  const stop=m=>{toast(m,true);return null};
+  let o=null;
+
+  if(curOp==='outbound'){
+    if(!to) return stop('اختر الجهة المستلمة.');
+    if(good<=0) return stop('أدخل عددًا أكبر من صفر.');
+    if(good>w.good) return stop(`المخزن به ${fmt(w.good)} بكش سليم فقط. عدّل العدد أو سجّل شراءً جديدًا.`);
+    o={type:'outbound',from:WH,to,good,driver,ts};
+  }
+  else if(curOp==='sale'||curOp==='empty'){
+    if(!from||!to) return stop('اختر الجهة المرسلة والمستلمة.');
+    if(good<=0) return stop('أدخل عددًا أكبر من صفر.');
+    o={type:curOp,from,to,good,driver,ts};
+  }
+  else if(curOp==='inbound'){
+    if(!from) return stop('اختر المبيع المورِّد.');
+    if(good+dmg<=0) return stop('أدخل عدد السليم أو التالف.');
+    o={type:'inbound',from,to:WH,good,damaged:dmg,driver,reason:dmg>0?reasonVal(from):null,ts};
+  }
+  else if(curOp==='settle'){
+    if(!from) return stop('اختر الجهة.');
+    if(g('#f-remain')==='') return stop('أدخل المتبقي عند الجهة بعد العد، أو اكتب 0 إذا صُفّيت العهدة.');
+    const c=settleCalc();
+    if(c.back<=0 && c.lost===0) return stop('لا يوجد راجع ولا فرق. لا حاجة لتسجيل تسوية.');
+    if(c.back>0 && !driver) return stop('اختر السائق الذي نقل الراجع للمخزن.');
+    if(c.lost>0 && !confirm(`الفاقد ${fmt(c.lost)} بكش.\n\nسيُخصم نهائيًا من عهدة «${nameOf(from)}» ومن إجمالي الأصول ولا يمكن التراجع إلا بإلغاء الحركة.\n\nتأكيد التسجيل؟`)) return;
+    if(c.lost<0 && !confirm(`زيادة جرد ${fmt(-c.lost)} بكش ستُضاف لعهدة «${nameOf(from)}» وإلى إجمالي الأصول.\n\nتأكيد التسجيل؟`)) return;
+    o={type:'settle',from,to:WH,good,damaged:dmg,lost:c.lost,remain:n(g('#f-remain')),
+       driver,reason:dmg>0?reasonVal(from):null,note,ts};
+  }
+  else if(curOp==='dmg_out'){
+    if(dmg<=0) return stop('أدخل عددًا أكبر من صفر.');
+    if(dmg>w.dmg) return stop(`رصيد التالف بالمخزن ${fmt(w.dmg)} بكش فقط.`);
+    o={type:'dmg_out',from:WH,to:FAC,damaged:dmg,driver,note,ts};
+  }
+  else if(curOp==='dmg_in'){
+    if(good<=0) return stop('أدخل عددًا أكبر من صفر.');
+    o={type:'dmg_in',from:FAC,to:WH,good,driver,note,ts};
+  }
+  else if(curOp==='purchase'){
+    if(good<=0) return stop('أدخل عددًا أكبر من صفر.');
+    o={type:'purchase',from:null,to:WH,good,note,ts};
+  }
+  if(!o) return;
+
+  if(editing){
+    const before=Object.assign({},editing);
+    const after=Object.assign({},blank,o,{id:editing.id});
+    const why=prompt('سبب التعديل (يُحفظ في سجل التغييرات):','تصحيح إدخال');
+    if(why===null) return;
+    const i=db.txs.findIndex(t=>t.id===editing.id);
+    db.txs[i]=after;
+    logAudit('edit',before,after,why.trim());
+    editing=null; save(); renderAll();
+    toast('حُفظ التعديل وسُجّل في سجل التغييرات.');
+  }else{
+    addTx(o);
+    toast(o.type==='settle'&&n(o.lost)>0
+      ? `سُجّلت التسوية. خُصم فاقد ${fmt(o.lost)} بكش من عهدة ${nameOf(o.from)}.`
+      : `تم تسجيل ${TX[curOp].ar}.`);
+    renderOpForm();
+  }
+});
+
+function startEdit(id){
+  const t=db.txs.find(x=>x.id===id); if(!t) return;
+  if(t.type==='dsettle') return toast('تصفية حساب السائق لا تُعدَّل. ألغِها وسجّل تصفية جديدة.',true);
+  if(t.type==='count'||t.type==='loss') return toast('هذه حركة بصيغة قديمة. ألغِها وسجّل «جرد وتسوية» بدلًا منها.',true);
+  editing=t; curOp=t.type; go('ops'); renderOpsPick(); renderOpForm();
+  toast('عدّل البيانات ثم احفظ.');
+}
+function voidTx(id){
+  const t=db.txs.find(x=>x.id===id); if(!t) return;
+  const why=prompt(`إلغاء هذه الحركة:\n${txSummary(t)}\n\nاكتب سبب الإلغاء (يُحفظ في سجل التغييرات):`,'');
+  if(why===null) return;
+  if(!why.trim()) return toast('الإلغاء يحتاج سببًا مكتوبًا.',true);
+  logAudit('delete',t,null,why.trim());
+  db.txs=db.txs.filter(x=>x.id!==id);
+  if(editing&&editing.id===id) editing=null;
+  save(); renderAll(); toast('أُلغيت الحركة وحُفظ سببها في سجل التغييرات.');
+}
+
+/* ============ البيانات الأساسية ============ */
+const TYPE_AR={farm:'مزرعة',sales:'مبيع',driver:'سائق',warehouse:'مخزن',factory:'مصنع'};
+function renderData(){
+  $('#whName').value=ent(WH).name;
+  $('#whInit').value=n(ent(WH).init);
+  $('#whInitDmg').value=n(ent(WH).initDmg);
+  $('#verLine').textContent=`الإصدار ${APP_VER} · ${db.txs.length} حركة · ${db.audit.length} تغيير مسجّل`;
+
+  const list=['farm','sales','driver'].flatMap(t=>byType(t));
+  $('#entityList').innerHTML=list.length?list.map(e=>{
+    const isDrv=e.type==='driver';
+    const meta=isDrv
+      ? (()=>{const s=driverStats(e.id);return `غرامة إهمال قائمة: <b class="num">${fmt(s.open)}</b> · رحلات <span class="num">${fmt(s.trips)}</span>`})()
+      : `الرصيد الحالي: <b class="num">${fmt(balanceOf(e.id))}</b> · افتتاحي <span class="num">${fmt(e.init)}</span>`;
+    return `<div class="tx">
+      <div class="badge" aria-hidden="true">${isDrv?'☗':(e.type==='farm'?'⌂':'⌗')}</div>
+      <div class="body"><div class="t1">${esc(e.name)} <span class="pill">${TYPE_AR[e.type]}</span></div>
+        <div class="t2">${meta}${e.note?' · '+esc(e.note):''}</div></div>
+      <div class="acts"><button class="btn ghost sm" data-edit="${e.id}">تعديل</button>
+        <button class="btn ghost sm" data-del="${e.id}" style="color:var(--rust)">حذف</button></div>
+    </div>`;}).join('')
+    : `<div class="empty"><strong>لا توجد جهات بعد</strong>أضف مزرعة أو مبيعًا أو سائقًا لتبدأ تسجيل الحركات.</div>`;
+  $$('[data-edit]').forEach(b=>b.onclick=()=>openEntity(null,b.dataset.edit));
+  $$('[data-del]').forEach(b=>b.onclick=()=>delEntity(b.dataset.del));
+}
+$('#btnSaveWh').onclick=()=>{
+  const nm=$('#whName').value.trim();
+  if(!nm) return toast('اكتب اسم المخزن.',true);
+  const e=ent(WH); e.name=nm; e.init=n($('#whInit').value); e.initDmg=n($('#whInitDmg').value);
+  save(); renderAll(); toast('حُفظت بيانات المخزن.');
+};
+$$('[data-add]').forEach(b=>b.onclick=()=>openEntity(b.dataset.add));
+
+function openEntity(type,id){
+  const e=id?ent(id):null, t=e?e.type:type;
+  $('#e-id').value=id||''; $('#e-type').value=t;
+  $('#e-name').value=e?e.name:''; $('#e-init').value=e?n(e.init):0; $('#e-note').value=e?(e.note||''):'';
+  $('#modalTitle').textContent=(e?'تعديل ':'إضافة ')+TYPE_AR[t];
+  $('#e-balwrap').hidden=(t==='driver');
+  $('#e-balhint').textContent=t==='sales'?'يمكن أن يكون الرصيد سالبًا إذا كان المبيع مدينًا لك ببكش.':'عدد البكش الموجود عند هذه الجهة قبل تسجيل أي حركة.';
+  $('#modal').classList.add('open');
+  setTimeout(()=>$('#e-name').focus(),40);
+}
+const closeModal=()=>$('#modal').classList.remove('open');
+$('#modalCancel').onclick=closeModal;
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+$('#entityForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const id=$('#e-id').value, type=$('#e-type').value, nm=$('#e-name').value.trim();
+  if(!nm) return toast('اكتب الاسم.',true);
+  const init=type==='driver'?0:n($('#e-init').value), note=$('#e-note').value.trim();
+  if(id){ Object.assign(ent(id),{name:nm,init,note}); toast('حُفظ التعديل.'); }
+  else{ db.entities.push({id:uid(),name:nm,type,init,note}); toast(`أُضيف ${TYPE_AR[type]} «${nm}».`); }
+  save(); closeModal(); renderAll();
+});
+function delEntity(id){
+  if(db.txs.some(t=>t.from===id||t.to===id||t.driver===id))
+    return toast('لا يمكن الحذف: هذه الجهة مذكورة في حركات مسجّلة. عدّل الاسم بدلًا من الحذف للحفاظ على الدفتر.',true);
+  if(!confirm(`حذف «${nameOf(id)}» نهائيًا؟`)) return;
+  db.entities=db.entities.filter(e=>e.id!==id);
+  save(); renderAll(); toast('حُذفت الجهة.');
+}
+
+/* ============ النسخ الاحتياطي ============ */
+$('#btnBackup').onclick=()=>{
+  const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`baksha-backup-${dateKey(Date.now())}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('نُزّلت النسخة الاحتياطية.');
+};
+$('#btnRestore').onclick=()=>$('#fileInput').click();
+$('#fileInput').addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(!d||!Array.isArray(d.entities)||!Array.isArray(d.txs)) throw 0;
+      if(!confirm(`الاستعادة ستستبدل البيانات الحالية بـ ${d.txs.length} حركة و${d.entities.length} جهة. متابعة؟`)) return;
+      db=d; save(); db=load(); renderAll(); toast('استُعيدت البيانات.');
+    }catch(err){ toast('الملف غير صالح: اختر ملف نسخة احتياطية صادرًا من هذا التطبيق.',true); }
+    finally{ e.target.value=''; }
+  };
+  r.readAsText(file);
+});
+$('#btnWipe').onclick=()=>{
+  if(!confirm('سيُحذف كل السجل نهائيًا من هذا المتصفح. نزّلت نسخة احتياطية؟')) return;
+  if(!confirm('تأكيد أخير: حذف كل البيانات؟')) return;
+  localStorage.removeItem(KEY); db=seed(); save(); renderAll(); toast('حُذفت كل البيانات.');
+};
+
+/* ============ التقارير ============ */
+const REPS={daily:{ar:'يومية المخزن',icon:'▤'},stmt:{ar:'كشف حساب جهة',icon:'▥'},
+            risk:{ar:'مخاطر السائقين',icon:'☗'},all:{ar:'كل الحركات',icon:'▦'},
+            audit:{ar:'سجل التغييرات',icon:'✎'}};
+let curRep='daily', repDate=dateKey(Date.now()), repEntity='', repFrom='', repTo='', repQ='';
+
+function renderRepPick(){
+  $('#repPick').innerHTML=Object.entries(REPS).map(([k,v])=>
+    `<button type="button" role="tab" data-rep="${k}" aria-selected="${k===curRep}"><i aria-hidden="true">${v.icon}</i>${v.ar}</button>`).join('');
+  $$('#repPick button').forEach(b=>b.onclick=()=>{curRep=b.dataset.rep;renderRepPick();renderReport();});
+}
+function rangeCtl(){
+  return `<div class="row three">
+    <div><label for="r-from">من تاريخ</label><input id="r-from" type="date" value="${repFrom}"></div>
+    <div><label for="r-to">إلى تاريخ</label><input id="r-to" type="date" value="${repTo}"></div>
+    <div><label for="r-q">بحث</label><input id="r-q" type="search" value="${esc(repQ)}" placeholder="اسم جهة، سائق، ملاحظة…"></div>
+  </div>`;
+}
+function bindRange(){
+  const f=$('#r-from'), t=$('#r-to'), q=$('#r-q');
+  if(f) f.onchange=e=>{repFrom=e.target.value;renderReport()};
+  if(t) t.onchange=e=>{repTo=e.target.value;renderReport()};
+  if(q) q.oninput=e=>{repQ=e.target.value;clearTimeout(q._t);q._t=setTimeout(renderReport,250)};
+}
+const inRange=t=>{
+  const k=dateKey(t.ts);
+  return (!repFrom||k>=repFrom)&&(!repTo||k<=repTo);
+};
+const matchQ=t=>{
+  if(!repQ.trim()) return true;
+  const s=[TX[t.type]?.ar,nameOf(t.from),nameOf(t.to),t.driver?nameOf(t.driver):'',t.note,REASONS[t.reason]||''].join(' ').toLowerCase();
+  return s.includes(repQ.trim().toLowerCase());
+};
+
+function renderReport(){
+  const c=$('#repControls'), s=$('#repSheet');
+
+  if(curRep==='daily'){
+    c.style.display='block';
+    c.innerHTML=`<label for="r-date">التاريخ</label><input id="r-date" type="date" value="${repDate}">`;
+    $('#r-date').onchange=e=>{repDate=e.target.value||dateKey(Date.now());renderReport()};
+    const list=db.txs.filter(t=>dateKey(t.ts)===repDate&&(t.from===WH||t.to===WH)).sort((a,b)=>a.ts-b.ts);
+    let inG=0,inD=0,out=0;
+    list.forEach(t=>{if(t.to===WH){inG+=n(t.good);inD+=n(t.damaged)} if(t.from===WH){out+=vol(t)}});
+    const w=whBalance();
+    s.innerHTML=sheetHead('يومية المخزن',`${fmtLong(new Date(repDate+'T00:00:00').getTime())} · ${esc(ent(WH).name)}`)+(list.length?`
+      <div class="tablewrap"><table>
+        <thead><tr><th>الوقت</th><th>الحركة</th><th>الطرف الآخر</th><th>السائق</th><th>داخل</th><th>خارج</th><th>تالف</th></tr></thead>
+        <tbody>${list.map(t=>{
+          const other=t.from===WH?nameOf(t.to):(t.type==='purchase'?(t.note||'مورِّد'):nameOf(t.from));
+          const d=new Date(t.ts);
+          return `<tr><td class="n">${d2(d.getHours())}:${d2(d.getMinutes())}</td><td>${TX[t.type].ar}</td>
+            <td>${esc(other)}</td><td>${t.driver?esc(nameOf(t.driver)):'—'}</td>
+            <td class="n">${t.to===WH?fmt(n(t.good)):''}</td><td class="n">${t.from===WH?fmt(vol(t)):''}</td>
+            <td class="n">${t.to===WH&&n(t.damaged)?fmt(t.damaged):''}</td></tr>`}).join('')}</tbody>
+        <tfoot><tr><td colspan="4">الإجمالي</td><td class="n">${fmt(inG)}</td><td class="n">${fmt(out)}</td><td class="n">${fmt(inD)}</td></tr>
+        <tr><td colspan="4">رصيد المخزن الآن</td><td colspan="3" class="n">سليم ${fmt(w.good)} · تالف ${fmt(w.dmg)}</td></tr></tfoot>
+      </table></div>`:`<div class="empty"><strong>لا حركات في هذا اليوم</strong>اختر تاريخًا آخر أو سجّل حركة جديدة.</div>`);
+  }
+
+  else if(curRep==='stmt'){
+    c.style.display='block';
+    const list=byType('farm','sales');
+    c.innerHTML=`<label for="r-ent">الجهة</label><select id="r-ent">${list.length?`<option value="">اختر مزرعة أو مبيع</option>`+list.map(e=>`<option value="${e.id}" ${e.id===repEntity?'selected':''}>${esc(e.name)} — ${TYPE_AR[e.type]}</option>`).join(''):`<option value="">— لا توجد جهات مسجّلة —</option>`}</select>`+rangeCtl();
+    $('#r-ent').onchange=e=>{repEntity=e.target.value;renderReport()}; bindRange();
+    const e0=ent(repEntity);
+    if(!e0){ s.innerHTML=sheetHead('كشف حساب','')+`<div class="empty"><strong>اختر جهة</strong>سيظهر هنا كل ما خرج إليها وما رجع منها.</div>`; return; }
+    const all=db.txs.filter(t=>t.from===e0.id||t.to===e0.id).sort((a,b)=>a.ts-b.ts);
+    // رصيد أول المدة = الافتتاحي + كل الحركات قبل تاريخ البداية
+    let open=n(e0.init);
+    all.forEach(t=>{ if(repFrom&&dateKey(t.ts)<repFrom) open+=(t.to===e0.id?vol(t):-outQ(t)); });
+    const list2=all.filter(t=>inRange(t)&&matchQ(t));
+    let run=open,tin=0,tout=0,tlost=0;
+    const body=list2.map(t=>{
+      const isIn=t.to===e0.id, q=isIn?vol(t):outQ(t), l=isIn?0:n(t.lost);
+      isIn?(run+=q,tin+=q):(run-=q,tout+=q,tlost+=l);
+      const other=isIn?(t.type==='count'?'تسوية جرد':nameOf(t.from)):(t.type==='loss'?'تسوية فاقد':(t.type==='count'?'تسوية جرد':nameOf(t.to)));
+      return `<tr><td class="n">${fmtDT(t.ts)}</td><td>${TX[t.type].ar}</td><td>${esc(other)}</td>
+        <td>${t.driver?esc(nameOf(t.driver)):'—'}</td><td class="n">${isIn?fmt(q):''}</td>
+        <td class="n">${isIn?'':fmt(q)}</td><td class="n"${l>0?' style="color:var(--rust)"':''}>${l?fmt(l):''}</td><td class="n">${fmt(run)}</td></tr>`;
+    }).join('');
+    const period=(repFrom||repTo)?`الفترة ${repFrom||'البداية'} ← ${repTo||'اليوم'} · `:'';
+    s.innerHTML=sheetHead(`كشف حساب — ${esc(e0.name)}`,`${TYPE_AR[e0.type]} · ${period}الرصيد الحالي ${fmt(balanceOf(e0.id))} بكش`)+(list2.length?`
+      <div class="tablewrap"><table>
+        <thead><tr><th>التاريخ</th><th>الحركة</th><th>الطرف الآخر</th><th>السائق</th><th>وارد</th><th>منصرف</th><th>منه فاقد</th><th>الرصيد</th></tr></thead>
+        <tbody><tr><td colspan="7">رصيد أول المدة</td><td class="n">${fmt(open)}</td></tr>${body}</tbody>
+        <tfoot><tr><td colspan="4">إجمالي الفترة</td><td class="n">${fmt(tin)}</td><td class="n">${fmt(tout)}</td><td class="n">${fmt(tlost)}</td><td class="n">${fmt(run)}</td></tr>
+        ${(repFrom||repTo||repQ)?`<tr><td colspan="7">الرصيد الحالي (كل الفترات)</td><td class="n">${fmt(balanceOf(e0.id))}</td></tr>`:''}</tfoot>
+      </table></div>`:`<div class="empty"><strong>لا حركات مطابقة</strong>رصيد أول المدة ${fmt(open)} بكش. وسّع الفترة أو امسح البحث.</div>`);
+  }
+
+  else if(curRep==='risk'){
+    c.style.display='none'; c.innerHTML='';
+    const drivers=byType('driver');
+    const list=drivers.map(d=>({d,s:driverStats(d.id)})).sort((a,b)=>b.s.open-a.s.open);
+    const tot=list.reduce((s,r)=>s+r.s.open,0);
+    s.innerHTML=sheetHead('لوحة مخاطر السائقين',`${drivers.length} سائق · إجمالي الغرامات القائمة ${fmt(tot)} بكش`)+(list.length?`
+      <div class="tablewrap"><table>
+        <thead><tr><th>السائق</th><th>إهمال</th><th>مُصفّى</th><th>قائم</th><th>إهلاك طبيعي</th><th>رحلات</th><th class="no-print">إجراء</th></tr></thead>
+        <tbody>${list.map(({d,s})=>`<tr><td>${esc(d.name)} ${s.open>0?`<span class="pill a">${fmt(s.open)} قائم</span>`:`<span class="pill g">نظيف</span>`}</td>
+          <td class="n">${fmt(s.negl)}</td><td class="n">${fmt(s.cleared)}</td><td class="n"><b>${fmt(s.open)}</b></td>
+          <td class="n">${fmt(s.nat)}</td><td class="n">${fmt(s.trips)}</td>
+          <td class="no-print">${s.open>0?`<button class="btn sm" data-clear="${d.id}">تصفية حساب</button>`:'—'}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td>الإجمالي</td><td class="n">${fmt(list.reduce((a,r)=>a+r.s.negl,0))}</td>
+          <td class="n">${fmt(list.reduce((a,r)=>a+r.s.cleared,0))}</td><td class="n">${fmt(tot)}</td>
+          <td class="n">${fmt(list.reduce((a,r)=>a+r.s.nat,0))}</td><td colspan="2"></td></tr></tfoot>
+      </table></div><p class="hint" style="padding:0 14px 14px">التصفية تُسجَّل كحركة في الدفتر ولا تحذف أي تلف سابق من التاريخ.</p>`
+      :`<div class="empty"><strong>لا سائقين مسجّلين</strong>أضف سائقًا من تبويب البيانات لبدء تتبع الإهمال.</div>`);
+    $$('[data-clear]').forEach(b=>b.onclick=()=>clearDriver(b.dataset.clear));
+  }
+
+  else if(curRep==='all'){
+    c.style.display='block'; c.innerHTML=rangeCtl(); bindRange();
+    const list=db.txs.filter(t=>inRange(t)&&matchQ(t)).sort((a,b)=>b.ts-a.ts);
+    const filtered=(repFrom||repTo||repQ)?` · ${list.length} من ${db.txs.length}`:'';
+    s.innerHTML=sheetHead('كل الحركات',`${db.txs.length} حركة مسجّلة${filtered}`)+(list.length?`
+      <div class="tablewrap"><table>
+        <thead><tr><th>التاريخ</th><th>الحركة</th><th>من</th><th>إلى</th><th>السائق</th><th>سليم</th><th>تالف</th><th>فاقد</th><th>السبب/ملاحظة</th><th class="no-print">إجراء</th></tr></thead>
+        <tbody>${list.map(t=>`<tr><td class="n">${fmtDT(t.ts)}</td><td>${TX[t.type].ar}</td>
+          <td>${t.type==='purchase'?esc(t.note||'مورِّد'):esc(nameOf(t.from))}</td>
+          <td>${t.type==='loss'?'خارج النظام':(t.type==='dsettle'?'—':esc(nameOf(t.to)))}</td>
+          <td>${t.driver?esc(nameOf(t.driver)):'—'}</td>
+          <td class="n">${t.type==='dsettle'?fmt(t.cleared):fmt(t.good)}</td><td class="n">${fmt(t.damaged)}</td>
+          <td class="n"${n(t.lost)>0?' style="color:var(--rust)"':''}>${n(t.lost)?fmt(t.lost):''}</td>
+          <td class="wrap">${esc(REASONS[t.reason]||t.note||'')||'—'}</td>
+          <td class="no-print"><button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
+            <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button></td></tr>`).join('')}</tbody>
+      </table></div>`:`<div class="empty"><strong>لا حركات مطابقة</strong>وسّع الفترة أو امسح البحث.</div>`);
+    bindRowActions();
+  }
+
+  else { // سجل التغييرات
+    c.style.display='none'; c.innerHTML='';
+    const list=[...db.audit].sort((a,b)=>b.ts-a.ts);
+    s.innerHTML=sheetHead('سجل التغييرات',`${list.length} تعديل أو إلغاء مسجّل`)+(list.length?`
+      <div class="tablewrap"><table>
+        <thead><tr><th>وقت التغيير</th><th>الإجراء</th><th>قبل</th><th>بعد</th><th>السبب</th></tr></thead>
+        <tbody>${list.map(a=>`<tr><td class="n">${fmtDT(a.ts)}</td>
+          <td>${a.action==='edit'?'<span class="pill a">تعديل</span>':'<span class="pill d">إلغاء</span>'}</td>
+          <td class="wrap">${esc(txSummary(a.before))}</td>
+          <td class="wrap">${a.after?esc(txSummary(a.after)):'—'}</td>
+          <td class="wrap">${esc(a.reason)||'—'}</td></tr>`).join('')}</tbody>
+      </table></div><p class="hint" style="padding:0 14px 14px">هذا السجل للمراجعة فقط ولا يؤثر على الأرصدة.</p>`
+      :`<div class="empty"><strong>لا تغييرات</strong>لم تُعدَّل أو تُلغَ أي حركة حتى الآن.</div>`);
+  }
+}
+function sheetHead(title,sub){
+  return `<div class="rh"><h3>${title}</h3><p>${sub?sub+' · ':''}صدر في <span class="num">${fmtDT(Date.now())}</span> — ${esc(ent(WH).name)}</p></div>`;
+}
+function clearDriver(id){
+  const s=driverStats(id);
+  if(s.open<=0) return;
+  if(!confirm(`تصفية ${fmt(s.open)} بكش إهمال على «${nameOf(id)}»؟ ستُسجَّل كحركة تصفية ويبقى التاريخ كما هو.`)) return;
+  addTx({type:'dsettle',driver:id,cleared:s.open,note:'تصفية غرامة إهمال'});
+  toast(`صُفّي حساب ${nameOf(id)}.`);
+}
+$('#btnPdf').onclick=()=>{
+  if(typeof html2pdf==='undefined') return toast('مكتبة PDF غير محمّلة. استخدم «طباعة» ثم «حفظ كـ PDF».',true);
+  const name=(REPS[curRep]?.ar||'تقرير')+'-'+dateKey(Date.now())+'.pdf';
+  toast('يُجهّز ملف PDF…');
+  html2pdf().set({margin:8,filename:name,image:{type:'jpeg',quality:.98},
+    html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from($('#repSheet')).save()
+    .catch(()=>toast('تعذّر إنشاء PDF. استخدم «طباعة» ثم «حفظ كـ PDF».',true));
+};
+
+/* ============ التثبيت والتحديث ============ */
+let installPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault(); installPrompt=e;
+  $('#btnInstall').hidden=false;
+  $('#installHint').textContent='اضغط الزر أعلاه لتثبيت التطبيق على جهازك.';
+});
+$('#btnInstall').onclick=async()=>{
+  if(!installPrompt) return;
+  installPrompt.prompt();
+  const {outcome}=await installPrompt.userChoice;
+  installPrompt=null; $('#btnInstall').hidden=true;
+  toast(outcome==='accepted'?'ثُبّت التطبيق على جهازك.':'أُلغي التثبيت.');
+};
+window.addEventListener('appinstalled',()=>{
+  $('#btnInstall').hidden=true;
+  $('#installHint').textContent='التطبيق مثبّت على هذا الجهاز.';
+});
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./sw.js').then(reg=>{
+      reg.addEventListener('updatefound',()=>{
+        const sw=reg.installing;
+        sw&&sw.addEventListener('statechange',()=>{
+          if(sw.state==='installed'&&navigator.serviceWorker.controller)
+            toast('نسخة أحدث جاهزة. أغلق التطبيق وافتحه لتفعيلها.');
+        });
+      });
+    }).catch(()=>{});
+  });
+}
+
+/* ============ التشغيل ============ */
+function renderAll(){ renderHome(); renderOpsPick(); renderOpForm(); renderData(); renderRepPick(); renderReport(); }
+renderAll();
+</script>
+</body>
+</html>
