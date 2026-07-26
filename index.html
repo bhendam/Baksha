@@ -80,6 +80,20 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 24px}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-inline-end:4px;vertical-align:1px}
 .dot.g{background:var(--catch)}.dot.d{background:var(--rust)}
 
+.stat.drill{cursor:pointer;text-align:start;font-family:inherit;display:block;width:100%;
+  border:1px solid var(--line);transition:box-shadow .15s ease,transform .12s ease}
+.stat.drill:hover{box-shadow:0 2px 4px rgba(10,34,51,.08),0 10px 22px rgba(10,34,51,.1)}
+.stat.drill:active{transform:translateY(1px)}
+.chev{color:var(--tide);font-weight:700}
+.drow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line);
+  width:100%;background:none;border-inline:0;border-bottom:0;text-align:start;cursor:pointer;font-family:inherit}
+.drow:hover{background:var(--ice)}
+.drow .nm{font-weight:600;font-size:.9rem}
+.drow .mt{font-size:.74rem;color:var(--slate);margin-top:2px}
+.drow .bl{margin-inline-start:auto;font-weight:700;font-family:var(--ff-num);direction:ltr;white-space:nowrap}
+.drow.idle .nm{color:var(--slate)}
+.dsum{padding:13px 14px;background:var(--ice);display:flex;gap:18px;flex-wrap:wrap;font-size:.78rem;color:var(--slate)}
+.dsum b{display:block;font-size:1.3rem;font-family:var(--ff-num);color:var(--hull)}
 .manifest{margin-top:12px}
 .bar{display:flex;height:34px;border-radius:9px;overflow:hidden;border:1px solid var(--line);background:var(--ice)}
 .seg{position:relative;min-width:3px;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.28) 0 2px,transparent 2px 11px)}
@@ -216,8 +230,8 @@ nav button[aria-current=page]{color:var(--tide)}
       <div class="stat assets"><div class="lbl">إجمالي الأصول</div><div class="val num" id="s-assets">0</div><div class="sub">كل البكش المملوك</div></div>
       <div class="stat wh"><div class="lbl">رصيد المخزن</div><div class="val num" id="s-wh">0</div>
         <div class="sub"><span><i class="dot g"></i>سليم <b class="num" id="s-wh-g">0</b></span><span><i class="dot d"></i>تالف <b class="num" id="s-wh-d">0</b></span></div></div>
-      <div class="stat farm"><div class="lbl">إجمالي عهدة المزارع</div><div class="val num" id="s-farm">0</div><div class="sub" id="s-farm-n"></div></div>
-      <div class="stat sale"><div class="lbl">إجمالي عهدة المبايع</div><div class="val num" id="s-sale">0</div><div class="sub" id="s-sale-n"></div></div>
+      <button type="button" class="stat farm drill" data-drill="farm"><div class="lbl">إجمالي عهدة المزارع <span class="chev">›</span></div><div class="val num" id="s-farm">0</div><div class="sub" id="s-farm-n"></div></button>
+      <button type="button" class="stat sale drill" data-drill="sales"><div class="lbl">إجمالي عهدة المبايع <span class="chev">›</span></div><div class="val num" id="s-sale">0</div><div class="sub" id="s-sale-n"></div></button>
     </div>
 
     <div class="eyebrow">توزيع الأصول</div>
@@ -237,7 +251,13 @@ nav button[aria-current=page]{color:var(--tide)}
     <div class="tabs" id="opGroups" role="tablist" aria-label="مجموعات العمليات"></div>
     <div class="subtabs" id="opSubs" role="tablist" aria-label="نوع العملية"></div>
     <div class="eyebrow" id="opTitle">تفاصيل العملية</div>
-    <div class="card pad"><form id="opForm" autocomplete="off"></form></div>
+    <div class="card pad" id="opFormCard"><form id="opForm" autocomplete="off"></form></div>
+    <div class="btnrow"><button type="button" class="btn ghost" id="btnLog">عرض سجل العمليات للتعديل أو الإلغاء</button></div>
+    <div id="opLog" hidden>
+      <input id="logQ" type="search" placeholder="ابحث بالجهة أو السائق أو الملاحظة…">
+      <div class="card" id="logList" style="margin-top:10px"></div>
+      <div class="btnrow"><button type="button" class="btn ghost" id="logMore">عرض المزيد</button></div>
+    </div>
   </section>
 
   <!-- ==================== التقارير ==================== -->
@@ -266,13 +286,17 @@ nav button[aria-current=page]{color:var(--tide)}
       <button class="btn block" id="btnSaveWh">حفظ بيانات المخزن</button>
     </div>
 
-    <div class="eyebrow">المزارع والمبايع والسائقون</div>
-    <div class="btnrow" style="margin-top:0">
-      <button class="btn sm" data-add="farm">إضافة مزرعة</button>
-      <button class="btn sm" data-add="sales">إضافة مبيع</button>
-      <button class="btn sm" data-add="driver">إضافة سائق</button>
-    </div>
-    <div class="card" id="entityList" style="margin-top:12px"></div>
+    <div class="eyebrow">المزارع</div>
+    <button class="btn sm" data-add="farm">إضافة مزرعة</button>
+    <div class="card" id="list-farm" style="margin-top:10px"></div>
+
+    <div class="eyebrow">المبايع</div>
+    <button class="btn sm" data-add="sales">إضافة مبيع</button>
+    <div class="card" id="list-sales" style="margin-top:10px"></div>
+
+    <div class="eyebrow">السائقون</div>
+    <button class="btn sm" data-add="driver">إضافة سائق</button>
+    <div class="card" id="list-driver" style="margin-top:10px"></div>
 
     <div class="eyebrow">تثبيت التطبيق</div>
     <div class="card pad">
@@ -311,7 +335,10 @@ nav button[aria-current=page]{color:var(--tide)}
       <input id="e-name" type="text" required maxlength="60">
       <div id="e-balwrap">
         <label for="e-init">الرصيد الافتتاحي (بكش)</label>
-        <input id="e-init" type="number" step="1" value="0">
+        <div style="display:flex;gap:8px">
+          <input id="e-init" type="number" step="1" value="0">
+          <button type="button" class="btn ghost" id="e-sign" style="flex:0 0 auto;padding:11px 15px" title="سالب / موجب">±</button>
+        </div>
         <div class="hint" id="e-balhint"></div>
       </div>
       <label for="e-note">ملاحظة (اختياري)</label>
@@ -321,6 +348,16 @@ nav button[aria-current=page]{color:var(--tide)}
         <button type="button" class="btn ghost" id="modalCancel">إلغاء</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal" id="drill" role="dialog" aria-modal="true" aria-labelledby="drillTitle">
+  <div class="card">
+    <div class="pad" style="display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)">
+      <h3 id="drillTitle"></h3>
+      <button class="btn ghost sm" id="drillClose" style="margin-inline-start:auto">إغلاق</button>
+    </div>
+    <div id="drillBody"></div>
   </div>
 </div>
 
@@ -427,6 +464,7 @@ const TX={
   outbound:{ar:'صرف من المخزن',icon:'↗',cls:'out',hint:'مخزن ← مزرعة أو مبيع'},
   sale:    {ar:'بيع سمك',icon:'⇢',cls:'out',hint:'مزرعة ← مبيع'},
   empty:   {ar:'تحويل فارغ',icon:'⇠',cls:'out',hint:'مبيع ← مزرعة'},
+  f2f:     {ar:'تحويل بين المزارع',icon:'⇌',cls:'out',hint:'مزرعة ← مزرعة'},
   inbound: {ar:'توريد راجع للمخزن',icon:'↙',cls:'in',hint:'مبيع ← المخزن'},
   settle:  {ar:'جرد وتسوية',icon:'⊜',cls:'warn',hint:'مزرعة أو مبيع ← المخزن'},
   dmg_out: {ar:'إرسال تالف للمصنع',icon:'⊗',cls:'bad',hint:'مخزن ← المصنع'},
@@ -444,10 +482,12 @@ const vol=t=>n(t.good)+n(t.damaged);   // ما ينتقل فعليًا من جه
 const outQ=t=>vol(t)+n(t.lost);        // ما يخرج من الجهة المرسلة: المنتقل + الفاقد (الفاقد يخرج من النظام كله)
 const rows=(skip)=>skip?db.txs.filter(t=>t.id!==skip):db.txs;
 
-function whBalance(skip){
+function whBalance(skip,filter){
   // المخزن يبدأ برصيدين افتتاحيين منفصلين: سليم وتالف
+  // filter اختياري: لحساب رصيد المخزن حتى تاريخ معيّن (أول اليوم / آخره)
   let good=n(ent(WH)?.init), dmg=n(ent(WH)?.initDmg);
   for(const t of rows(skip)){
+    if(filter&&!filter(t)) continue;
     if(t.type==='outbound')      good-=n(t.good);
     else if(t.type==='inbound'||t.type==='settle'){ good+=n(t.good); dmg+=n(t.damaged); }
     else if(t.type==='purchase') good+=n(t.good);
@@ -544,6 +584,38 @@ function renderHome(){
   $('#hdrCount').textContent=`${db.txs.length} حركة`;
 }
 
+/* تفاصيل عهدة المزارع أو المبايع، والضغط على أي جهة يفتح كشف حسابها */
+function openDrill(kind){
+  const list=byType(kind).map(e=>({e,b:balanceOf(e.id)}))
+              .sort((a,b)=>Math.abs(b.b)-Math.abs(a.b));
+  const active=list.filter(x=>x.b!==0), total=list.reduce((s,x)=>s+x.b,0);
+  const word=kind==='farm'?'المزارع':'المبايع', one=kind==='farm'?'مزرعة':'مبيع';
+  $('#drillTitle').textContent=`عهدة ${word}`;
+  $('#drillBody').innerHTML=
+    `<div class="dsum">
+       <span>${one==='مزرعة'?'مزارع':'مبايع'} نشطة<b>${fmt(active.length)}</b></span>
+       <span>مسجّلة<b>${fmt(list.length)}</b></span>
+       <span>إجمالي العهدة<b>${fmt(total)}</b></span>
+     </div>`
+    + (list.length ? list.map(({e,b})=>
+        `<button type="button" class="drow ${b===0?'idle':''}" data-stmt="${e.id}">
+           <div><div class="nm">${esc(e.name)}</div>
+             <div class="mt">${b===0?'لا عهدة حاليًا':'نشط'}${e.note?' · '+esc(e.note):''} · اضغط لكشف الحساب</div></div>
+           <div class="bl" style="color:${b<0?'var(--rust)':b===0?'var(--slate)':'var(--hull)'}">${fmt(b)}</div>
+         </button>`).join('')
+      : `<div class="empty"><strong>لا يوجد ${one} مسجّل</strong>أضفه من تبويب البيانات.</div>`);
+  $$('[data-stmt]').forEach(b=>b.onclick=()=>openStmt(b.dataset.stmt));
+  $('#drill').classList.add('open');
+}
+function openStmt(id){
+  $('#drill').classList.remove('open');
+  curRep='stmt'; repEntity=id; repFrom=''; repTo=''; repQ='';
+  go('reports'); renderRepPick(); renderReport();
+}
+$$('[data-drill]').forEach(b=>b.onclick=()=>openDrill(b.dataset.drill));
+$('#drillClose').onclick=()=>$('#drill').classList.remove('open');
+$('#drill').addEventListener('click',e=>{if(e.target.id==='drill')$('#drill').classList.remove('open')});
+
 function txRow(t,acts){
   const m=TX[t.type]||{ar:t.type,icon:'•',cls:''};
   let l2;
@@ -584,11 +656,11 @@ function bindRowActions(){
 const GROUPS=[
   {k:'out',  ar:'صادر',    icon:'↗', sub:['outbound','dmg_out']},
   {k:'in',   ar:'وارد',    icon:'↙', sub:['inbound','dmg_in','purchase']},
-  {k:'move', ar:'تحويلات', icon:'⇄', sub:['sale','empty']},
+  {k:'move', ar:'تحويلات', icon:'⇄', sub:['sale','empty','f2f']},
   {k:'adj',  ar:'تسويات',  icon:'⊜', sub:['settle']}
 ];
 const SHORT={outbound:'صرف عهدة',dmg_out:'تالف للمصنع',inbound:'توريد راجع',dmg_in:'بديل من المصنع',
-             purchase:'شراء جديد',sale:'بيع سمك',empty:'تحويل فارغ',settle:'جرد وتسوية'};
+             purchase:'شراء جديد',sale:'بيع سمك',empty:'تحويل فارغ',f2f:'بين المزارع',settle:'جرد وتسوية'};
 const groupOf=op=>GROUPS.find(g=>g.sub.includes(op))||GROUPS[0];
 let curOp='outbound', editing=null;
 
@@ -630,6 +702,30 @@ function driverSel(req,sel){
    <select id="f-driver" ${req?'required':''}>${d.length?`<option value="">اختر السائق</option>`+d.map(e=>`<option value="${e.id}" ${e.id===sel?'selected':''}>${esc(e.name)}</option>`).join(''):`<option value="">— أضف سائقًا من تبويب البيانات —</option>`}</select>`;
 }
 const qtyF=(id,lbl,val)=>`<label for="${id}">${lbl}</label><input id="${id}" type="number" min="0" step="1" value="${val??''}" inputmode="numeric">`;
+/* اختيار الجهة على خطوتين: النوع أولًا (مزرعة/مبيع) ثم الاسم من قائمة مفلترة */
+function entPickF(base,label,curId){
+  const t=curId?ent(curId)?.type:'';
+  return `<label for="${base}-kind">${label}</label>
+    <select id="${base}-kind" required>
+      <option value="">اختر النوع…</option>
+      <option value="farm" ${t==='farm'?'selected':''}>مزرعة</option>
+      <option value="sales" ${t==='sales'?'selected':''}>مبيع</option>
+    </select>
+    <select id="${base}" required data-cur="${curId||''}" style="margin-top:8px" ${t?'':'hidden'}></select>`;
+}
+function bindEntPick(base){
+  const k=$('#'+base+'-kind'), s=$('#'+base);
+  if(!k||!s) return;
+  const fill=()=>{
+    const t=k.value;
+    s.hidden=!t;
+    if(!t){ s.innerHTML=''; return; }
+    s.innerHTML=opts(byType(t), t==='farm'?'اختر المزرعة':'اختر المبيع', s.dataset.cur);
+    s.dataset.cur='';
+  };
+  k.addEventListener('change',()=>{ fill(); s.dispatchEvent(new Event('change')); s.dispatchEvent(new Event('input')); });
+  fill();
+}
 const whenF=()=>`<label for="f-when">وقت الحركة</label><input id="f-when" type="datetime-local" value="${toInput(editing?editing.ts:Date.now())}">
   <div class="hint">اضبطه على وقت الحركة الفعلي إن كنت تسجّلها لاحقًا.</div>`;
 /* سبب التلف يظهر للمبايع فقط، لأن التالف الراجع من المزرعة لا يُحتسب على السائق */
@@ -655,7 +751,7 @@ function renderOpForm(){
 
   if(curOp==='outbound'){
     h=`<div class="hint">المتاح للصرف الآن: <b class="num">${fmt(w.good)}</b> بكش سليم.</div>
-      <label for="f-to">الجهة المستلمة</label><select id="f-to" required>${opts(byType('farm','sales'),'اختر مزرعة أو مبيع',V('to'))}</select>
+      ${entPickF('f-to','الجهة المستلمة',V('to'))}
       ${qtyF('f-good','عدد البكش السليم',V('good'))}${driverSel(true,V('driver'))}`;
   }
   else if(curOp==='sale'){
@@ -669,14 +765,19 @@ function renderOpForm(){
       ${qtyF('f-good','عدد البكش الفارغ',V('good'))}${driverSel(true,V('driver'))}`;
   }
   else if(curOp==='inbound'){
-    h=`<label for="f-from">الجهة المورِّدة</label><select id="f-from" required>${opts(byType('farm','sales'),'اختر مزرعة أو مبيع',V('from'))}</select>
+    h=`${entPickF('f-from','الجهة المورِّدة',V('from'))}
       <div class="row two"><div>${qtyF('f-good','سليم',V('good'))}</div><div>${qtyF('f-damaged','تالف',n(V('damaged',0)))}</div></div>
       ${reasonF()}
       ${driverSel(true,V('driver'))}`;
   }
+  else if(curOp==='f2f'){
+    h=`<label for="f-from">المزرعة المرسِلة</label><select id="f-from" required>${opts(byType('farm'),'اختر المزرعة',V('from'))}</select>
+      <label for="f-to">المزرعة المستلمة</label><select id="f-to" required>${opts(byType('farm'),'اختر المزرعة',V('to'))}</select>
+      ${qtyF('f-good','عدد البكش',V('good'))}${driverSel(true,V('driver'))}`;
+  }
   else if(curOp==='settle'){
     h=`<div class="hint">أدخل الراجع للمخزن والمتبقي عند الجهة بعد العد، ويحسب التطبيق الفاقد وينبّهك به.</div>
-      <label for="f-from">الجهة</label><select id="f-from" required>${opts(byType('farm','sales'),'اختر مزرعة أو مبيع',V('from'))}</select>
+      ${entPickF('f-from','الجهة',V('from'))}
       <div class="row two">
         <div>${qtyF('f-good','راجع للمخزن — سليم',n(V('good',0)))}</div>
         <div>${qtyF('f-damaged','راجع للمخزن — تالف',n(V('damaged',0)))}</div>
@@ -705,6 +806,7 @@ function renderOpForm(){
   }
   f.innerHTML=h+whenF()+`<button type="submit" class="btn block">${editing?'حفظ التعديل':'تسجيل '+TX[curOp].ar}</button>`;
 
+  bindEntPick('f-from'); bindEntPick('f-to');
   if(curOp==='inbound'||curOp==='settle'){
     $('#f-damaged').addEventListener('input',syncReason);
     $('#f-from').addEventListener('change',syncReason);
@@ -756,8 +858,9 @@ $('#opForm').addEventListener('submit',e=>{
     if(good>w.good) return stop(`المخزن به ${fmt(w.good)} بكش سليم فقط. عدّل العدد أو سجّل شراءً جديدًا.`);
     o={type:'outbound',from:WH,to,good,driver,ts};
   }
-  else if(curOp==='sale'||curOp==='empty'){
+  else if(curOp==='sale'||curOp==='empty'||curOp==='f2f'){
     if(!from||!to) return stop('اختر الجهة المرسلة والمستلمة.');
+    if(from===to) return stop('لا يمكن التحويل من الجهة إلى نفسها.');
     if(good<=0) return stop('أدخل عددًا أكبر من صفر.');
     o={type:curOp,from,to,good,driver,ts};
   }
@@ -816,6 +919,7 @@ function startEdit(id){
   if(t.type==='dsettle') return toast('تصفية حساب السائق لا تُعدَّل. ألغِها وسجّل تصفية جديدة.',true);
   if(t.type==='count'||t.type==='loss') return toast('هذه حركة بصيغة قديمة. ألغِها وسجّل «جرد وتسوية» بدلًا منها.',true);
   editing=t; curOp=t.type; go('ops'); renderOpsPick(); renderOpForm();
+  $('#opFormCard').scrollIntoView({behavior:'smooth',block:'center'});
   toast('عدّل البيانات ثم احفظ.');
 }
 function voidTx(id){
@@ -829,6 +933,30 @@ function voidTx(id){
   save(); renderAll(); toast('أُلغيت الحركة وحُفظ سببها في سجل التغييرات.');
 }
 
+/* سجل العمليات: الوصول لأي حركة سابقة لتعديلها أو إلغائها من نفس التبويب */
+let logCount=15;
+function renderOpLog(){
+  const q=($('#logQ').value||'').trim().toLowerCase();
+  const all=[...db.txs].sort((a,b)=>b.ts-a.ts).filter(t=>{
+    if(!q) return true;
+    return [TX[t.type]?.ar,nameOf(t.from),nameOf(t.to),t.driver?nameOf(t.driver):'',t.note,REASONS[t.reason]||'']
+           .join(' ').toLowerCase().includes(q);
+  });
+  const shown=all.slice(0,logCount);
+  $('#logList').innerHTML = shown.length ? shown.map(t=>txRow(t,true)).join('')
+    : `<div class="empty"><strong>لا حركات مطابقة</strong>${q?'جرّب كلمة أخرى.':'سجّل أول حركة من النموذج أعلاه.'}</div>`;
+  $('#logMore').hidden = all.length<=logCount;
+  $('#logMore').textContent = `عرض المزيد (${fmt(all.length-shown.length)} متبقية)`;
+  bindRowActions();
+}
+$('#btnLog').onclick=()=>{
+  const box=$('#opLog'); box.hidden=!box.hidden;
+  $('#btnLog').textContent = box.hidden ? 'عرض سجل العمليات للتعديل أو الإلغاء' : 'إخفاء السجل';
+  if(!box.hidden){ logCount=15; renderOpLog(); box.scrollIntoView({behavior:'smooth',block:'start'}); }
+};
+$('#logQ').addEventListener('input',()=>{ logCount=15; renderOpLog(); });
+$('#logMore').onclick=()=>{ logCount+=15; renderOpLog(); };
+
 /* ============ البيانات الأساسية ============ */
 const TYPE_AR={farm:'مزرعة',sales:'مبيع',driver:'سائق',warehouse:'مخزن',factory:'مصنع'};
 function renderData(){
@@ -837,20 +965,22 @@ function renderData(){
   $('#whInitDmg').value=n(ent(WH).initDmg);
   $('#verLine').textContent=`الإصدار ${APP_VER} · ${db.txs.length} حركة · ${db.audit.length} تغيير مسجّل`;
 
-  const list=['farm','sales','driver'].flatMap(t=>byType(t));
-  $('#entityList').innerHTML=list.length?list.map(e=>{
-    const isDrv=e.type==='driver';
-    const meta=isDrv
-      ? (()=>{const s=driverStats(e.id);return `غرامة إهمال قائمة: <b class="num">${fmt(s.open)}</b> · رحلات <span class="num">${fmt(s.trips)}</span>`})()
-      : `الرصيد الحالي: <b class="num">${fmt(balanceOf(e.id))}</b> · افتتاحي <span class="num">${fmt(e.init)}</span>`;
-    return `<div class="tx">
-      <div class="badge" aria-hidden="true">${isDrv?'☗':(e.type==='farm'?'⌂':'⌗')}</div>
-      <div class="body"><div class="t1">${esc(e.name)} <span class="pill">${TYPE_AR[e.type]}</span></div>
-        <div class="t2">${meta}${e.note?' · '+esc(e.note):''}</div></div>
-      <div class="acts"><button class="btn ghost sm" data-edit="${e.id}">تعديل</button>
-        <button class="btn ghost sm" data-del="${e.id}" style="color:var(--rust)">حذف</button></div>
-    </div>`;}).join('')
-    : `<div class="empty"><strong>لا توجد جهات بعد</strong>أضف مزرعة أو مبيعًا أو سائقًا لتبدأ تسجيل الحركات.</div>`;
+  // كل فئة في قائمة مستقلة
+  ['farm','sales','driver'].forEach(type=>{
+    const list=byType(type), isDrv=type==='driver';
+    $('#list-'+type).innerHTML = list.length ? list.map(e=>{
+      const meta=isDrv
+        ? (()=>{const st=driverStats(e.id);return `غرامة إهمال قائمة: <b class="num">${fmt(st.open)}</b> · رحلات <span class="num">${fmt(st.trips)}</span>`})()
+        : `الرصيد الحالي: <b class="num">${fmt(balanceOf(e.id))}</b> · افتتاحي <span class="num">${fmt(e.init)}</span>`;
+      return `<div class="tx">
+        <div class="badge" aria-hidden="true">${isDrv?'☗':(type==='farm'?'⌂':'⌗')}</div>
+        <div class="body"><div class="t1">${esc(e.name)}</div>
+          <div class="t2">${meta}${e.note?' · '+esc(e.note):''}</div></div>
+        <div class="acts"><button class="btn ghost sm" data-edit="${e.id}">تعديل</button>
+          <button class="btn ghost sm" data-del="${e.id}" style="color:var(--rust)">حذف</button></div>
+      </div>`;}).join('')
+      : `<div class="empty"><strong>لا يوجد ${TYPE_AR[type]} مسجّل</strong>اضغط زر الإضافة أعلاه.</div>`;
+  });
   $$('[data-edit]').forEach(b=>b.onclick=()=>openEntity(null,b.dataset.edit));
   $$('[data-del]').forEach(b=>b.onclick=()=>delEntity(b.dataset.del));
 }
@@ -872,10 +1002,11 @@ function openEntity(type,id){
   $('#modal').classList.add('open');
   setTimeout(()=>$('#e-name').focus(),40);
 }
+$('#e-sign').onclick=()=>{ const f=$('#e-init'); f.value=-n(f.value); f.focus(); };
 const closeModal=()=>$('#modal').classList.remove('open');
 $('#modalCancel').onclick=closeModal;
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#drill').classList.remove('open');}});
 $('#entityForm').addEventListener('submit',e=>{
   e.preventDefault();
   const id=$('#e-id').value, type=$('#e-type').value, nm=$('#e-name').value.trim();
@@ -963,11 +1094,23 @@ function renderReport(){
     c.style.display='block';
     c.innerHTML=`<label for="r-date">التاريخ</label><input id="r-date" type="date" value="${repDate}">`;
     $('#r-date').onchange=e=>{repDate=e.target.value||dateKey(Date.now());renderReport()};
-    const list=db.txs.filter(t=>dateKey(t.ts)===repDate&&(t.from===WH||t.to===WH)).sort((a,b)=>a.ts-b.ts);
-    let inG=0,inD=0,out=0;
-    list.forEach(t=>{if(t.to===WH){inG+=n(t.good);inD+=n(t.damaged)} if(t.from===WH){out+=vol(t)}});
-    const w=whBalance();
-    s.innerHTML=sheetHead('يومية المخزن',`${fmtLong(new Date(repDate+'T00:00:00').getTime())} · ${esc(ent(WH).name)}`)+(list.length?`
+
+    // رصيد أول اليوم = كل الحركات قبل هذا التاريخ · رصيد آخره = حتى نهايته
+    const open=whBalance(null,t=>dateKey(t.ts)<repDate);
+    const close=whBalance(null,t=>dateKey(t.ts)<=repDate);
+    const now=whBalance();
+    const dayTx=db.txs.filter(t=>dateKey(t.ts)===repDate);
+    const lostDay=dayTx.reduce((a,t)=>a+n(t.lost),0);
+    const list=dayTx.filter(t=>t.from===WH||t.to===WH).sort((a,b)=>a.ts-b.ts);
+    let inG=0,inD=0,outQty=0;
+    list.forEach(t=>{if(t.to===WH){inG+=n(t.good);inD+=n(t.damaged)} if(t.from===WH){outQty+=vol(t)}});
+
+    s.innerHTML=sheetHead('يومية المخزن',`${fmtLong(new Date(repDate+'T00:00:00').getTime())} · ${esc(ent(WH).name)}`)
+    + `<div class="dsum">
+         <span>رصيد أول اليوم — سليم<b>${fmt(open.good)}</b></span>
+         <span>رصيد أول اليوم — تالف<b>${fmt(open.dmg)}</b></span>
+       </div>`
+    + (list.length?`
       <div class="tablewrap"><table>
         <thead><tr><th>الوقت</th><th>الحركة</th><th>الطرف الآخر</th><th>السائق</th><th>داخل</th><th>خارج</th><th>تالف</th></tr></thead>
         <tbody>${list.map(t=>{
@@ -977,9 +1120,18 @@ function renderReport(){
             <td>${esc(other)}</td><td>${t.driver?esc(nameOf(t.driver)):'—'}</td>
             <td class="n">${t.to===WH?fmt(n(t.good)):''}</td><td class="n">${t.from===WH?fmt(vol(t)):''}</td>
             <td class="n">${t.to===WH&&n(t.damaged)?fmt(t.damaged):''}</td></tr>`}).join('')}</tbody>
-        <tfoot><tr><td colspan="4">الإجمالي</td><td class="n">${fmt(inG)}</td><td class="n">${fmt(out)}</td><td class="n">${fmt(inD)}</td></tr>
-        <tr><td colspan="4">رصيد المخزن الآن</td><td colspan="3" class="n">سليم ${fmt(w.good)} · تالف ${fmt(w.dmg)}</td></tr></tfoot>
-      </table></div>`:`<div class="empty"><strong>لا حركات في هذا اليوم</strong>اختر تاريخًا آخر أو سجّل حركة جديدة.</div>`);
+        <tfoot><tr><td colspan="4">حركة اليوم</td><td class="n">${fmt(inG)}</td><td class="n">${fmt(outQty)}</td><td class="n">${fmt(inD)}</td></tr></tfoot>
+      </table></div>`
+      :`<div class="empty"><strong>لا حركات على المخزن في هذا اليوم</strong>الرصيد بقي كما هو.</div>`)
+    + `<div class="dsum" style="border-top:1px solid var(--line)">
+         <span>رصيد آخر اليوم — سليم<b>${fmt(close.good)}</b></span>
+         <span>رصيد آخر اليوم — تالف<b>${fmt(close.dmg)}</b></span>
+         <span>فاقد اليوم<b style="color:${lostDay>0?'var(--rust)':'var(--hull)'}">${fmt(lostDay)}</b></span>
+       </div>
+       <p class="hint" style="padding:10px 14px 14px;margin:0;border-top:1px solid var(--line)">
+         الرصيد الفعلي في المخزن الآن (<span class="num">${fmtDT(Date.now())}</span>):
+         سليم <b class="num">${fmt(now.good)}</b> · تالف <b class="num">${fmt(now.dmg)}</b> · الإجمالي <b class="num">${fmt(now.total)}</b>
+       </p>`;
   }
 
   else if(curRep==='stmt'){
@@ -1121,7 +1273,8 @@ if('serviceWorker' in navigator){
 }
 
 /* ============ التشغيل ============ */
-function renderAll(){ renderHome(); renderOpsPick(); renderOpForm(); renderData(); renderRepPick(); renderReport(); }
+function renderAll(){ renderHome(); renderOpsPick(); renderOpForm(); renderData(); renderRepPick(); renderReport();
+  if(!$('#opLog').hidden) renderOpLog(); }
 renderAll();
 </script>
 </body>
