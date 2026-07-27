@@ -291,9 +291,34 @@ nav button[aria-current=page]{color:var(--tide)}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media print{nav,header,.no-print{display:none!important} body{background:#fff;padding:0} .card{box-shadow:none}}
 .report-sheet{background:#fff}
-.report-sheet .rh{padding:14px;border-bottom:1px solid var(--line)}
-.report-sheet .rh h3{font-size:1.05rem}
-.report-sheet .rh p{margin:3px 0 0;font-size:.78rem;color:var(--slate)}
+.report-sheet .rh{padding:16px 14px;border-bottom:2px solid var(--tide);
+  background:linear-gradient(180deg,#F5FAFC,#fff)}
+.report-sheet .rh h3{font-size:1.2rem;color:var(--hull)}
+.report-sheet .rh .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.report-sheet .rh .meta span{font-size:.73rem;color:var(--deep);background:#fff;
+  border:1px solid var(--line);border-radius:99px;padding:3px 10px}
+.rfoot{padding:11px 14px;border-top:1px solid var(--line);font-size:.7rem;color:var(--slate);
+  display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+/* الجداول: مسافات أوسع وعناوين أوضح */
+table{font-size:.88rem}
+th,td{padding:11px 10px;vertical-align:middle}
+th{font-size:.73rem;letter-spacing:.03em;border-bottom:2px solid var(--line)}
+td.n{font-size:.9rem}
+.tdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-inline-end:6px;vertical-align:1px}
+td .sub2{display:block;font-size:.7rem;color:var(--slate);margin-top:2px}
+.numin{color:#0a6f5e;font-weight:700}
+.numout{color:#0c5c76;font-weight:700}
+.numlost{color:#8f3520;font-weight:700}
+.muted{color:#B6C4CE}
+@media print{
+  thead{display:table-header-group}
+  tr{break-inside:avoid}
+  .tablewrap{overflow:visible!important}
+  table{min-width:0!important;font-size:10pt}
+  th,td{padding:6px 7px}
+  .report-sheet .rh{background:#fff;border-bottom:2px solid #000}
+  .rfoot{display:flex!important}
+}
 </style>
 </head>
 <body>
@@ -892,22 +917,16 @@ function ledger(){
   _led={bal,wg,wd,drv};
   return _led;
 }
-/* مرشّح الحركات السارية في لحظة/يوم معيّن — يجيب «كم كان الرصيد يومها» */
+/* مرشّح الحركات: الملغاة مستبعدة دائمًا ولا تظهر في أي تقرير مهما كان تاريخها.
+   asOf/before للنطاق الزمني فقط، فتعطي رصيد ذلك اليوم بحسب الدفتر المصحّح. */
 function txFilter(o){
   o=o||{};
   return t=>{
+    if(!live(t)) return false;
     if(o.skip && t.id===o.skip) return false;
-    if(o.asOf){                                  // كما كان الدفتر آخر ذلك اليوم
-      if(dateKey(t.ts)>o.asOf) return false;
-      if(t.voidedAt && dateKey(t.voidedAt)<=o.asOf) return false;
-      return true;
-    }
-    if(o.before){                                // كما كان أول ذلك اليوم
-      if(dateKey(t.ts)>=o.before) return false;
-      if(t.voidedAt && dateKey(t.voidedAt)<o.before) return false;
-      return true;
-    }
-    return live(t);
+    if(o.asOf   && dateKey(t.ts)>o.asOf)     return false;   // حتى نهاية ذلك اليوم
+    if(o.before && dateKey(t.ts)>=o.before)  return false;   // حتى ما قبل ذلك اليوم
+    return true;
   };
 }
 function whBalance(o){
@@ -1245,14 +1264,20 @@ function txRow(t,acts){
       <div class="t2">${l2} · <span class="num">${fmtDT(t.ts)}</span>${dead&&t.voidReason?` · سبب الإلغاء: ${esc(t.voidReason)}`:''}</div>
     </div>
     <div class="qty"><span class="num">${fmt(q)}</span>${num(t.damaged)&&t.type!=='dmg_out'?`<small>تالف ${fmt(t.damaged)} · ${REASONS[t.reason]||''}</small>`:''}</div>
-    ${acts&&!dead?`<div class="acts no-print">
-       <button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
-       <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button></div>`:''}
+    ${!acts?'':dead
+      ?`<div class="acts no-print">
+          <button class="btn ghost sm" data-restore="${t.id}">استرجاع</button>
+          <button class="btn ghost sm" data-purge="${t.id}" style="color:var(--rust)">حذف نهائي</button></div>`
+      :`<div class="acts no-print">
+          <button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
+          <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button></div>`}
   </div>`;
 }
 function bindRowActions(){
   $$('[data-edittx]').forEach(b=>b.onclick=()=>startEdit(b.dataset.edittx));
   $$('[data-deltx]').forEach(b=>b.onclick=()=>voidTx(b.dataset.deltx));
+  $$('[data-purge]').forEach(b=>b.onclick=()=>purgeTx(b.dataset.purge));
+  $$('[data-restore]').forEach(b=>b.onclick=()=>restoreTx(b.dataset.restore));
 }
 
 /* نافذة تفاصيل العهدة */
@@ -1645,7 +1670,7 @@ function voidTx(id){
     const a=auditRec('void',t,null,why);
     if(editing&&editing.id===id) editing=null;
     if(await commit([putTx(voided),putAud(a)]))
-      toast('أُلغيت الحركة. لم تُحذف، بل بقيت في السجل موسومة.',false,async()=>{
+      toast('أُلغيت الحركة واختفت من التقارير. لحذفها نهائيًا استخدم زر «حذف نهائي» في السجل.',false,async()=>{
         const back=Object.assign({},t,{status:'active',voidedAt:null,voidReason:''});
         if(await commit([putTx(back),delAud(a.id)])) toast('رجعت الحركة كما كانت.');
       });
@@ -1926,9 +1951,20 @@ function filterBar(){
 function bindFilterBar(){ const b=$('#clearFilter'); if(b) b.onclick=()=>{repFrom='';repTo='';repQ='';renderReport()}; }
 /* سطر يوضّح وجود حركات ملغاة داخل التقرير */
 const voidNote=n0=>`<div class="vnote">يشمل هذا التقرير <b class="num">${fmt(n0)}</b> حركة ملغاة — تظهر مشطوبة ولا تدخل في أي إجمالي.</div>`;
+/* ترويسة موحّدة: عنوان واضح ثم بيانات التقرير كشرائح منفصلة تُقرأ بلمحة */
 function sheetHead(title,sub){
-  return `<div class="rh"><h3>${title}</h3><p>${sub?sub+' · ':''}صدر في <span class="num">${fmtDT(Date.now())}</span> — ${esc(ent(WH).name)}</p></div>`;
+  const chips=(sub||'').split('·').map(x=>x.trim()).filter(Boolean)
+    .map(x=>`<span>${x}</span>`).join('');
+  return `<div class="rh"><h3>${title}</h3>
+    <div class="meta">${chips}<span>${esc(ent(WH).name)}</span>
+      <span class="num">${fmtDT(Date.now())}</span></div></div>`;
 }
+const sheetFoot=()=>`<div class="rfoot"><span>سجل البكش — ${esc(ent(WH).name)}</span>
+  <span class="num">${fmtDT(Date.now())}</span></div>`;
+/* نقطة ملوّنة تُعرّف اتجاه الحركة بلمحة */
+const DOTC={in:'catch',out:'tide',bad:'rust',warn:'amber'};
+const typeDot=t=>`<span class="tdot" style="background:var(--${DOTC[TX[t.type]?.cls]||'slate'})"></span>`;
+const dash=v=>v?v:'<span class="muted">—</span>';
 
 function renderReport(){
   const c=$('#repControls'), s=$('#repSheet');
@@ -1954,7 +1990,7 @@ function renderReport(){
       if(t.to===WH){inG+=num(t.good);inD+=num(t.damaged)}
       if(t.from===WH){outQty+=vol(t)}
     });
-    s.innerHTML=sheetHead('يومية المخزن',`${fmtLong(new Date(repDate+'T00:00:00').getTime())} · ${esc(ent(WH).name)}`)
+    s.innerHTML=sheetHead('يومية المخزن',fmtLong(new Date(repDate+'T00:00:00').getTime()))
     + `<div class="dsum">
          <span>رصيد أول اليوم — سليم<b>${fmt(open.good)}</b></span>
          <span>رصيد أول اليوم — تالف<b>${fmt(open.dmg)}</b></span></div>`
@@ -1971,10 +2007,10 @@ function renderReport(){
           const dmC = isW ? (num(t.wdDiff)?(num(t.wdDiff)>0?'+':'')+fmt(t.wdDiff):'') : (t.to===WH&&num(t.damaged)?fmt(t.damaged):'');
           return `<tr>
             <td class="n">${d2(d.getHours())}:${d2(d.getMinutes())}</td>
-            <td>${TX[t.type].ar}</td>
-            <td>${esc(other)}</td><td>${t.driver?esc(nameOf(t.driver)):'—'}</td>
-            <td class="n">${inC}</td><td class="n">${outC}</td>
-            <td class="n">${dmC}</td></tr>`}).join('')}</tbody>
+            <td>${typeDot(t)}${TX[t.type].ar}${t.note?`<span class="sub2">${esc(t.note)}</span>`:''}</td>
+            <td>${esc(other)}</td><td>${dash(t.driver?esc(nameOf(t.driver)):'')}</td>
+            <td class="n numin">${dash(inC)}</td><td class="n numout">${dash(outC)}</td>
+            <td class="n numlost">${dash(dmC)}</td></tr>`}).join('')}</tbody>
         <tfoot><tr><td colspan="4">حركة اليوم</td><td class="n">${fmt(inG)}</td><td class="n">${fmt(outQty)}</td><td class="n">${fmt(inD)}</td></tr></tfoot>
       </table></div>`
       :`<div class="empty"><strong>لا حركات على المخزن في هذا اليوم</strong>الرصيد بقي كما هو.</div>`)
@@ -1984,7 +2020,8 @@ function renderReport(){
          <span>فاقد اليوم<b style="color:${lostDay>0?'var(--rust)':'var(--hull)'}">${fmt(lostDay)}</b></span></div>
        <p class="hint" style="padding:10px 14px 14px;margin:0;border-top:1px solid var(--line)">
          الرصيد الفعلي في المخزن الآن (<span class="num">${fmtDT(Date.now())}</span>):
-         سليم <b class="num">${fmt(now.good)}</b> · تالف <b class="num">${fmt(now.dmg)}</b> · الإجمالي <b class="num">${fmt(now.total)}</b></p>`;
+         سليم <b class="num">${fmt(now.good)}</b> · تالف <b class="num">${fmt(now.dmg)}</b> · الإجمالي <b class="num">${fmt(now.total)}</b></p>`
+    + sheetFoot();
   }
 
   else if(curRep==='stmt'){
@@ -2000,25 +2037,35 @@ function renderReport(){
     all.forEach(t=>{ if(repFrom&&dateKey(t.ts)<repFrom) open+=(t.to===e0.id?vol(t):-outQ(t)); });
     const list2=all.filter(t=>inRange(t)&&matchQ(t));
     let run=open,tin=0,tout=0,tlost=0;
+    let rowN=0;
     const body=list2.map(t=>{
       const isIn=t.to===e0.id, q=isIn?vol(t):outQ(t), l=isIn?0:num(t.lost);
       isIn?(run+=q,tin+=q):(run-=q,tout+=q,tlost+=l);
       const other=isIn?nameOf(t.from):(t.type==='settle'?'المخزن (تسوية)':nameOf(t.to));
-      return `<tr><td class="n">${fmtDT(t.ts)}</td>
-        <td>${TX[t.type].ar}</td><td>${esc(other)}</td>
-        <td>${t.driver?esc(nameOf(t.driver)):'—'}</td><td class="n">${isIn?fmt(q):''}</td>
-        <td class="n">${isIn?'':fmt(q)}</td><td class="n"${l>0?' style="color:var(--rust)"':''}>${l?fmt(l):''}</td>
-        <td class="n">${fmt(run)}</td></tr>`;
+      return `<tr><td class="n">${++rowN}</td><td class="n">${fmtDT(t.ts)}</td>
+        <td>${typeDot(t)}${TX[t.type].ar}${t.note?`<span class="sub2">${esc(t.note)}</span>`:''}</td>
+        <td>${esc(other)}</td>
+        <td>${dash(t.driver?esc(nameOf(t.driver)):'')}</td>
+        <td class="n numin">${isIn?fmt(q):'<span class="muted">—</span>'}</td>
+        <td class="n numout">${isIn?'<span class="muted">—</span>':fmt(q)}</td>
+        <td class="n numlost">${l?fmt(l):'<span class="muted">—</span>'}</td>
+        <td class="n"><b>${fmt(run)}</b></td></tr>`;
     }).join('');
     const period=(repFrom||repTo)?`الفترة ${repFrom||'البداية'} ← ${repTo||'اليوم'} · `:'';
     s.innerHTML=sheetHead(`كشف حساب — ${esc(e0.name)}`,`${TYPE_AR[e0.type]}${e0.code?' · كود '+esc(e0.code):''} · ${period}الرصيد الحالي ${fmt(balanceOf(e0.id))} بكش`)
+      +`<div class="dsum">
+          <span>رصيد أول المدة<b>${fmt(open)}</b></span>
+          <span>وارد<b style="color:#0a6f5e">${fmt(tin)}</b></span>
+          <span>منصرف<b style="color:#0c5c76">${fmt(tout)}</b></span>
+          <span>منه فاقد<b style="color:${tlost?'#8f3520':'var(--hull)'}">${fmt(tlost)}</b></span>
+          <span>الرصيد<b>${fmt(run)}</b></span></div>`
       +(list2.length?`
       <div class="tablewrap"><table class="sticky1">
-        <thead><tr><th>التاريخ</th><th>الحركة</th><th>الطرف الآخر</th><th>السائق</th><th>وارد</th><th>منصرف</th><th>منه فاقد</th><th>الرصيد</th></tr></thead>
-        <tbody><tr><td colspan="7">رصيد أول المدة</td><td class="n">${fmt(open)}</td></tr>${body}</tbody>
-        <tfoot><tr><td colspan="4">إجمالي الفترة</td><td class="n">${fmt(tin)}</td><td class="n">${fmt(tout)}</td><td class="n">${fmt(tlost)}</td><td class="n">${fmt(run)}</td></tr>
-        ${(repFrom||repTo||repQ)?`<tr><td colspan="7">الرصيد الحالي (كل الفترات)</td><td class="n">${fmt(balanceOf(e0.id))}</td></tr>`:''}</tfoot>
-      </table></div>`:`<div class="empty"><strong>لا حركات مطابقة</strong>رصيد أول المدة ${fmt(open)} بكش.</div>`);
+        <thead><tr><th>#</th><th>التاريخ</th><th>الحركة</th><th>الطرف الآخر</th><th>السائق</th><th>وارد</th><th>منصرف</th><th>منه فاقد</th><th>الرصيد</th></tr></thead>
+        <tbody><tr><td class="muted">—</td><td colspan="7">رصيد أول المدة</td><td class="n"><b>${fmt(open)}</b></td></tr>${body}</tbody>
+        <tfoot><tr><td colspan="5">إجمالي الفترة</td><td class="n numin">${fmt(tin)}</td><td class="n numout">${fmt(tout)}</td><td class="n numlost">${fmt(tlost)}</td><td class="n">${fmt(run)}</td></tr>
+        ${(repFrom||repTo||repQ)?`<tr><td colspan="8">الرصيد الحالي (كل الفترات)</td><td class="n">${fmt(balanceOf(e0.id))}</td></tr>`:''}</tfoot>
+      </table></div>`:`<div class="empty"><strong>لا حركات مطابقة</strong>رصيد أول المدة ${fmt(open)} بكش.</div>`)+sheetFoot();
   }
 
   else if(curRep==='risk'){
@@ -2037,7 +2084,7 @@ function renderReport(){
           <td class="n">${fmt(list.reduce((a,r)=>a+r.s.cleared,0))}</td><td class="n">${fmt(tot)}</td>
           <td class="n">${fmt(list.reduce((a,r)=>a+r.s.nat,0))}</td><td colspan="2"></td></tr></tfoot>
       </table></div><p class="hint" style="padding:0 14px 14px">تالف المزارع لا يُحتسب هنا. التصفية تُسجَّل كحركة ولا تحذف أي تلف سابق.</p>`
-      :`<div class="empty"><strong>لا سائقين مسجّلين</strong>أضف سائقًا من تبويب البيانات.</div>`);
+      :`<div class="empty"><strong>لا سائقين مسجّلين</strong>أضف سائقًا من تبويب البيانات.</div>`)+sheetFoot();
     $$('[data-clear]').forEach(b=>b.onclick=()=>clearDriver(b.dataset.clear));
   }
 
@@ -2046,21 +2093,30 @@ function renderReport(){
     const liveTx=db.txs.filter(live);
     const list=liveTx.filter(t=>inRange(t)&&matchQ(t)).sort((a,b)=>b.ts-a.ts);
     const filtered=(repFrom||repTo||repQ)?` · ${fmt(list.length)} من ${fmt(liveTx.length)}`:'';
-    s.innerHTML=sheetHead('كل الحركات',`${fmt(liveTx.length)} حركة سارية`)+(list.length?`
+    const sg=list.reduce((a,t)=>a+num(t.good),0), sd=list.reduce((a,t)=>a+num(t.damaged),0),
+          sl=list.reduce((a,t)=>a+num(t.lost),0);
+    s.innerHTML=sheetHead('كل الحركات',`${fmt(liveTx.length)} حركة سارية`)
+      +`<div class="dsum">
+          <span>حركات معروضة<b>${fmt(list.length)}</b></span>
+          <span>سليم<b style="color:#0a6f5e">${fmt(sg)}</b></span>
+          <span>تالف<b style="color:#8f3520">${fmt(sd)}</b></span>
+          <span>فاقد<b style="color:${sl?'#8f3520':'var(--hull)'}">${fmt(sl)}</b></span></div>`
+      +(list.length?`
       <div class="tablewrap"><table class="sticky1">
         <thead><tr><th>#</th><th>التاريخ</th><th>الحركة</th><th>من</th><th>إلى</th><th>السائق</th><th>سليم</th><th>تالف</th><th>فاقد</th><th>ملاحظة</th><th class="no-print">إجراء</th></tr></thead>
-        <tbody>${list.map(t=>{const ok=true;return `<tr>
+        <tbody>${list.map(t=>`<tr>
           <td class="n">${fmt(t.seq)}</td><td class="n">${fmtDT(t.ts)}</td>
-          <td>${TX[t.type].ar}${ok?'':' <span class="pill d">ملغاة</span>'}${lateEntry(t)?' <span class="pill a">متأخرة</span>':''}</td>
-          <td>${t.type==='purchase'?esc(t.note||'مورّد'):esc(nameOf(t.from))}</td>
-          <td>${t.type==='dsettle'?'—':esc(nameOf(t.to))}</td>
-          <td>${t.driver?esc(nameOf(t.driver)):'—'}</td>
-          <td class="n">${t.type==='dsettle'?fmt(t.cleared):fmt(t.good)}</td><td class="n">${fmt(t.damaged)}</td>
-          <td class="n"${num(t.lost)>0?' style="color:var(--rust)"':''}>${num(t.lost)?fmt(t.lost):''}</td>
-          <td class="wrap">${esc(REASONS[t.reason]||t.note||t.voidReason||'')||'—'}</td>
-          <td class="no-print">${ok?`<button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
-            <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button>`:'—'}</td></tr>`}).join('')}</tbody>
-      </table></div>`:`<div class="empty"><strong>لا حركات مطابقة</strong>وسّع الفترة أو امسح البحث.</div>`);
+          <td>${typeDot(t)}${TX[t.type].ar}${lateEntry(t)?' <span class="pill a">متأخرة</span>':''}</td>
+          <td>${t.type==='purchase'?esc(t.note||'مورّد'):dash(esc(nameOf(t.from)))}</td>
+          <td>${t.type==='dsettle'?'<span class="muted">—</span>':dash(esc(nameOf(t.to)))}</td>
+          <td>${dash(t.driver?esc(nameOf(t.driver)):'')}</td>
+          <td class="n numin">${t.type==='dsettle'?fmt(t.cleared):dash(num(t.good)?fmt(t.good):'')}</td>
+          <td class="n numlost">${dash(num(t.damaged)?fmt(t.damaged):'')}</td>
+          <td class="n numlost">${dash(num(t.lost)?fmt(t.lost):'')}</td>
+          <td class="wrap">${dash(esc(REASONS[t.reason]||t.note||''))}</td>
+          <td class="no-print"><button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
+            <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button></td></tr>`).join('')}</tbody>
+      </table></div>`:`<div class="empty"><strong>لا حركات مطابقة</strong>وسّع الفترة أو امسح البحث.</div>`)+sheetFoot();
     bindRowActions();
   }
 
@@ -2071,15 +2127,16 @@ function renderReport(){
       <div class="tablewrap"><table class="sticky1">
         <thead><tr><th>وقت التغيير</th><th>الإجراء</th><th>قبل</th><th>بعد</th><th>السبب</th><th class="no-print">إجراء</th></tr></thead>
         <tbody>${list.map(a=>`<tr><td class="n">${fmtDT(a.ts)}</td>
-          <td>${a.action==='edit'?'<span class="pill a">تعديل</span>':a.action==='restore'?'<span class="pill g">استرجاع</span>':'<span class="pill d">إلغاء</span>'}</td>
+          <td>${a.action==='edit'?'<span class="pill a">تعديل</span>':a.action==='restore'?'<span class="pill g">استرجاع</span>':a.action==='purge'?'<span class="pill d">حذف نهائي</span>':'<span class="pill d">إلغاء</span>'}</td>
           <td class="wrap">${esc(txSummary(a.before))}</td>
           <td class="wrap">${a.after?esc(txSummary(a.after)):'—'}</td>
           <td class="wrap">${esc(a.reason)||'—'}</td>
           <td class="no-print">${a.action==='void'&&db.txs.find(t=>t.id===a.txId&&!live(t))
-            ?`<button class="btn ghost sm" data-restore="${a.txId}">استرجاع</button>`:'—'}</td></tr>`).join('')}</tbody>
+            ?`<button class="btn ghost sm" data-restore="${a.txId}">استرجاع</button>
+              <button class="btn ghost sm" data-purge="${a.txId}" style="color:var(--rust)">حذف نهائي</button>`:'—'}</td></tr>`).join('')}</tbody>
       </table></div><p class="hint" style="padding:0 14px 14px">التقارير تعرض الحركات السارية فقط. الملغاة محفوظة هنا ولا تُحذف من قاعدة البيانات، ويمكن استرجاع أي حركة أُلغيت بالخطأ.</p>`
-      :`<div class="empty"><strong>لا تغييرات</strong>لم تُعدَّل أو تُلغَ أي حركة حتى الآن.</div>`);
-    $$('[data-restore]').forEach(b=>b.onclick=()=>restoreTx(b.dataset.restore));
+      :`<div class="empty"><strong>لا تغييرات</strong>لم تُعدَّل أو تُلغَ أي حركة حتى الآن.</div>`)+sheetFoot();
+    bindRowActions();
   }
 }
 /* استرجاع حركة أُلغيت بالخطأ — من سجل التغييرات فقط */
@@ -2090,6 +2147,16 @@ async function restoreTx(id){
   const back=Object.assign({},t,{status:'active',voidedAt:null,voidReason:''});
   const a=auditRec('restore',t,back,'استرجاع حركة ملغاة');
   if(await commit([putTx(back),putAud(a)])) toast('رجعت الحركة سارية.');
+}
+/* حذف نهائي لحركة ملغاة — يُزال السجل من قاعدة البيانات ويبقى أثره في سجل التغييرات */
+async function purgeTx(id){
+  const t=db.txs.find(x=>x.id===id);
+  if(!t) return;
+  if(live(t)) return toast('لا يمكن الحذف النهائي إلا لحركة ملغاة. ألغِها أولًا.',true);
+  if(!confirm(`حذف نهائي لهذه الحركة:\n\n${txSummary(t)}\n\nستُزال من قاعدة البيانات ولا يمكن استرجاعها. متابعة؟`)) return;
+  if(!confirm('تأكيد أخير: حذف نهائي بلا رجعة؟')) return;
+  const a=auditRec('purge',t,null,'حذف نهائي لحركة ملغاة'+(t.voidReason?` (أُلغيت بسبب: ${t.voidReason})`:''));
+  if(await commit([{store:'txs',action:'del',key:id},putAud(a)])) toast('حُذفت الحركة نهائيًا.');
 }
 async function clearDriver(id){
   const s=driverStats(id);
