@@ -28,7 +28,7 @@
 :root{
   --hull:#0A2233; --deep:#123B54; --tide:#0F6E8C; --wave:#2AA3C7;
   --ice:#EDF3F7; --paper:#FFFFFF; --catch:#0E9E86; --rust:#C0492C;
-  --amber:#B9790A; --slate:#5A7386; --line:#D6E2EA;
+  --amber:#B9790A; --slate:#4D6577; --line:#D6E2EA;
   --shadow:0 1px 2px rgba(10,34,51,.06), 0 6px 18px rgba(10,34,51,.06);
   --r:14px;
   --ff-ui:"IBM Plex Sans Arabic","Segoe UI",Tahoma,"Noto Sans Arabic",sans-serif;
@@ -85,6 +85,31 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 24px}
 .stat.drill:hover{box-shadow:0 2px 4px rgba(10,34,51,.08),0 10px 22px rgba(10,34,51,.1)}
 .stat.drill:active{transform:translateY(1px)}
 .chev{color:var(--tide);font-weight:700}
+/* شرائط التنبيه أعلى الرئيسية */
+.strip{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;border:1px solid}
+.strip.warn{background:#FBF0E4;border-color:#EBD3AC;color:#7A5405}
+.strip.info{background:#EAF5F9;border-color:#BEDCE8;color:#0c5c76}
+.strip b{display:block;font-family:var(--ff-dis);font-size:.95rem;margin-bottom:2px}
+.strip .btn{flex:0 0 auto;margin-inline-start:auto}
+.steps{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.steps h3{padding:13px 14px;font-size:1rem;border-bottom:1px solid var(--line)}
+.step{display:flex;gap:11px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line);font-size:.88rem}
+.step:last-child{border-bottom:0}
+.step i{font-style:normal;width:26px;height:26px;border-radius:50%;background:var(--ice);color:var(--deep);
+  display:grid;place-items:center;font-size:.8rem;font-weight:700;flex:0 0 auto;font-family:var(--ff-num)}
+.step.done{color:var(--slate)}
+.step.done i{background:var(--catch);color:#fff}
+.step .go{margin-inline-start:auto}
+/* دلالة اللون للسليم والتالف في النماذج */
+label .lg{display:inline-block;width:8px;height:8px;border-radius:50%;margin-inline-end:5px;vertical-align:1px}
+label .lg.g{background:var(--catch)}label .lg.d{background:var(--rust)}
+/* مؤشر الفلترة النشطة */
+.filterbar{display:flex;align-items:center;gap:9px;padding:9px 13px;background:#FBF0E4;border:1px solid #EBD3AC;
+  border-radius:10px;margin-bottom:10px;font-size:.8rem;color:#7A5405}
+.filterbar button{margin-inline-start:auto;flex:0 0 auto}
+#toast div .undo{background:rgba(255,255,255,.2);border:0;color:#fff;font-family:inherit;font-weight:700;
+  padding:6px 12px;border-radius:8px;margin-inline-start:12px;cursor:pointer;pointer-events:auto}
+#toast div{pointer-events:none}
 .drow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line);
   width:100%;background:none;border-inline:0;border-bottom:0;text-align:start;cursor:pointer;font-family:inherit}
 .drow:hover{background:var(--ice)}
@@ -94,6 +119,42 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 24px}
 .drow.idle .nm{color:var(--slate)}
 .dsum{padding:13px 14px;background:var(--ice);display:flex;gap:18px;flex-wrap:wrap;font-size:.78rem;color:var(--slate)}
 .dsum b{display:block;font-size:1.3rem;font-family:var(--ff-num);color:var(--hull)}
+/* حقل اختيار الجهة: يفتح شاشة بحث */
+.pickfield{width:100%;display:flex;align-items:center;gap:10px;min-height:52px;padding:11px 13px;
+  border:1px solid var(--line);border-radius:10px;background:#FBFDFE;font-family:inherit;
+  text-align:start;cursor:pointer;color:var(--hull);font-size:1rem}
+.pickfield:hover{border-color:var(--wave)}
+.pickfield[disabled]{opacity:.5;cursor:not-allowed}
+.pickfield .pf-n{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickfield .pf-n.ph{font-weight:400;color:var(--slate)}
+.pickfield .pf-b{font-family:var(--ff-num);direction:ltr;font-weight:700;font-size:.9rem}
+.pickfield .pf-i{color:var(--tide);font-weight:700;flex:0 0 auto}
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chips button{min-height:44px;padding:9px 14px;border-radius:99px;border:1px solid var(--line);
+  background:var(--paper);font-size:.86rem;font-weight:600;color:var(--deep);cursor:pointer;font-family:inherit}
+.chips button[aria-selected=true]{background:var(--tide);color:#fff;border-color:var(--tide)}
+/* شاشة البحث */
+.sheet{position:fixed;inset:0;z-index:70;display:none;flex-direction:column;background:var(--paper)}
+.sheet.open{display:flex}
+.sheet .sh-top{padding:12px 14px calc(12px);background:var(--hull);color:#fff;flex:0 0 auto}
+.sheet .sh-top h3{font-size:1rem;margin-bottom:9px}
+.sheet .sh-row{display:flex;gap:8px;align-items:center}
+.sheet input[type=search]{flex:1;padding:12px 13px;border:0;border-radius:10px;background:#fff;font-size:1rem}
+.sheet .sh-x{background:rgba(255,255,255,.16);color:#fff;border:0;border-radius:10px;padding:12px 14px;font-weight:600;cursor:pointer;font-family:inherit}
+.sh-chips{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.sh-chips button{padding:6px 12px;border-radius:99px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit;opacity:.75}
+.sh-chips button[aria-selected=true]{background:#fff;color:var(--hull);opacity:1;border-color:#fff}
+.sh-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sh-sec{padding:9px 14px;font-size:.7rem;font-weight:700;letter-spacing:.1em;color:var(--tide);background:var(--ice);position:sticky;top:0}
+.pkrow{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:11px 14px;
+  border:0;border-bottom:1px solid var(--line);background:none;text-align:start;cursor:pointer;font-family:inherit}
+.pkrow:hover{background:var(--ice)}
+.pkrow[aria-selected=true]{background:#EAF5F9}
+.pkrow .nm{font-weight:600;font-size:.94rem}
+.pkrow .mt{font-size:.75rem;color:var(--slate);margin-top:2px}
+.pkrow .bl{margin-inline-start:auto;font-family:var(--ff-num);direction:ltr;font-weight:700;white-space:nowrap}
+.code{display:inline-block;font-family:var(--ff-num);font-size:.72rem;background:var(--ice);color:var(--deep);
+  border:1px solid var(--line);border-radius:6px;padding:0 5px;margin-inline-start:5px}
 .manifest{margin-top:12px}
 .bar{display:flex;height:34px;border-radius:9px;overflow:hidden;border:1px solid var(--line);background:var(--ice)}
 .seg{position:relative;min-width:3px;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.28) 0 2px,transparent 2px 11px)}
@@ -114,7 +175,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 24px}
 .tx .t2{font-size:.78rem;color:var(--slate);margin-top:2px;word-break:break-word}
 .tx .qty{margin-inline-start:auto;text-align:end;font-weight:700;white-space:nowrap}
 .tx .qty small{display:block;font-weight:500;font-size:.7rem;color:var(--rust)}
-.tx .acts{display:flex;flex-direction:column;gap:6px;margin-inline-start:8px}
+.tx .acts{display:flex;flex-direction:column;gap:7px;margin-inline-start:8px;flex:0 0 auto}
 .empty{padding:30px 18px;text-align:center;color:var(--slate)}
 .empty strong{display:block;color:var(--hull);font-family:var(--ff-dis);font-size:1.02rem;margin-bottom:4px}
 
@@ -133,7 +194,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 49%,va
 .btn.ghost{background:transparent;color:var(--tide);border-color:var(--line)}
 .btn.ghost:hover{background:var(--ice)}
 .btn.danger{background:var(--rust)}.btn.danger:hover{background:#a53d23}
-.btn.sm{padding:8px 11px;font-size:.8rem;border-radius:9px}
+.btn.sm{padding:10px 13px;font-size:.8rem;border-radius:9px;min-height:40px}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 
 /* تبويب رئيسي (صادر / وارد / تحويلات / تسويات) */
@@ -225,11 +286,14 @@ nav button[aria-current=page]{color:var(--tide)}
 
   <!-- ==================== الرئيسية ==================== -->
   <section id="view-home" class="view active">
+    <div id="setupGuide"></div>
+    <div id="backupWarn"></div>
+    <button class="btn block" id="btnQuick" style="margin-top:0;font-size:1.02rem">＋ تسجيل عملية جديدة</button>
     <div class="eyebrow">ملخص اليوم</div>
     <div class="grid">
       <div class="stat assets"><div class="lbl">إجمالي الأصول</div><div class="val num" id="s-assets">0</div><div class="sub">كل البكش المملوك</div></div>
-      <div class="stat wh"><div class="lbl">رصيد المخزن</div><div class="val num" id="s-wh">0</div>
-        <div class="sub"><span><i class="dot g"></i>سليم <b class="num" id="s-wh-g">0</b></span><span><i class="dot d"></i>تالف <b class="num" id="s-wh-d">0</b></span></div></div>
+      <button type="button" class="stat wh drill" data-open="daily"><div class="lbl">رصيد المخزن <span class="chev">›</span></div><div class="val num" id="s-wh">0</div>
+        <div class="sub"><span><i class="dot g"></i>سليم <b class="num" id="s-wh-g">0</b></span><span><i class="dot d"></i>تالف <b class="num" id="s-wh-d">0</b></span></div></button>
       <button type="button" class="stat farm drill" data-drill="farm"><div class="lbl">إجمالي عهدة المزارع <span class="chev">›</span></div><div class="val num" id="s-farm">0</div><div class="sub" id="s-farm-n"></div></button>
       <button type="button" class="stat sale drill" data-drill="sales"><div class="lbl">إجمالي عهدة المبايع <span class="chev">›</span></div><div class="val num" id="s-sale">0</div><div class="sub" id="s-sale-n"></div></button>
     </div>
@@ -287,15 +351,24 @@ nav button[aria-current=page]{color:var(--tide)}
     </div>
 
     <div class="eyebrow">المزارع</div>
-    <button class="btn sm" data-add="farm">إضافة مزرعة</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="search" id="q-farm" placeholder="ابحث في المزارع…" style="flex:1">
+      <button class="btn sm" data-add="farm" style="flex:0 0 auto">إضافة</button>
+    </div>
     <div class="card" id="list-farm" style="margin-top:10px"></div>
 
     <div class="eyebrow">المبايع</div>
-    <button class="btn sm" data-add="sales">إضافة مبيع</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="search" id="q-sales" placeholder="ابحث في المبايع…" style="flex:1">
+      <button class="btn sm" data-add="sales" style="flex:0 0 auto">إضافة</button>
+    </div>
     <div class="card" id="list-sales" style="margin-top:10px"></div>
 
     <div class="eyebrow">السائقون</div>
-    <button class="btn sm" data-add="driver">إضافة سائق</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="search" id="q-driver" placeholder="ابحث في السائقين…" style="flex:1">
+      <button class="btn sm" data-add="driver" style="flex:0 0 auto">إضافة</button>
+    </div>
     <div class="card" id="list-driver" style="margin-top:10px"></div>
 
     <div class="eyebrow">تثبيت التطبيق</div>
@@ -341,6 +414,9 @@ nav button[aria-current=page]{color:var(--tide)}
         </div>
         <div class="hint" id="e-balhint"></div>
       </div>
+      <label for="e-code">كود أو رقم مختصر (اختياري)</label>
+      <input id="e-code" type="text" maxlength="12" placeholder="مثال: 47 أو F12">
+      <div class="hint">مفيد جدًا مع كثرة المزارع: تكتب الكود في البحث فتظهر المزرعة فورًا.</div>
       <label for="e-note">ملاحظة (اختياري)</label>
       <input id="e-note" type="text" maxlength="80">
       <div class="btnrow">
@@ -358,6 +434,33 @@ nav button[aria-current=page]{color:var(--tide)}
       <button class="btn ghost sm" id="drillClose" style="margin-inline-start:auto">إغلاق</button>
     </div>
     <div id="drillBody"></div>
+  </div>
+</div>
+
+<div class="sheet" id="picker" role="dialog" aria-modal="true" aria-labelledby="pkTitle">
+  <div class="sh-top">
+    <h3 id="pkTitle">اختر الجهة</h3>
+    <div class="sh-row">
+      <input type="search" id="pkQ" placeholder="اكتب أول حروف الاسم أو الكود…" autocomplete="off">
+      <button type="button" class="sh-x" id="pkClose">إغلاق</button>
+    </div>
+    <div class="sh-chips" id="pkChips"></div>
+  </div>
+  <div class="sh-body" id="pkBody"></div>
+</div>
+
+<div class="modal" id="whyModal" role="dialog" aria-modal="true" aria-labelledby="whyTitle">
+  <div class="card pad">
+    <h3 id="whyTitle">سبب التغيير</h3>
+    <p class="hint" id="whySub" style="margin-top:4px"></p>
+    <label>اختر السبب</label>
+    <div class="chips" id="whyChips"></div>
+    <label for="whyText">أو اكتبه</label>
+    <input id="whyText" type="text" maxlength="80" placeholder="سبب مختصر">
+    <div class="btnrow">
+      <button type="button" class="btn" id="whyOk">تأكيد</button>
+      <button type="button" class="btn ghost" id="whyCancel">إلغاء</button>
+    </div>
   </div>
 </div>
 
@@ -449,10 +552,16 @@ const toInput=ts=>{const d=new Date(ts);return `${dateKey(ts)}T${d2(d.getHours()
 const fromInput=s=>{const t=new Date(s).getTime(); return isNaN(t)?Date.now():t};
 
 let toastTimer;
-function toast(msg,isErr){
+function toast(msg,isErr,undoFn){
   const box=$('#toast'); box.innerHTML='';
   const el=document.createElement('div');
   el.textContent=msg; if(isErr) el.className='err';
+  if(undoFn){
+    const u=document.createElement('button');
+    u.className='undo'; u.textContent='تراجع';
+    u.onclick=()=>{ box.innerHTML=''; clearTimeout(toastTimer); undoFn(); };
+    el.appendChild(u);
+  }
   box.appendChild(el);
   requestAnimationFrame(()=>el.classList.add('show'));
   clearTimeout(toastTimer);
@@ -543,6 +652,31 @@ function txSummary(t){
   return `${m.ar} · ${nameOf(t.from)}←${nameOf(t.to)} · سليم ${fmt(g)}${d?` تالف ${fmt(d)}`:''}${l?` فاقد ${fmt(l)}`:''} · ${fmtDT(t.ts)}`;
 }
 
+/* نافذة سبب التعديل أو الإلغاء — أزرار جاهزة أسرع من الكتابة على الهاتف */
+const WHY_EDIT=['تصحيح كمية','تصحيح الجهة','تصحيح التاريخ','خطأ إدخال'];
+const WHY_VOID=['خطأ إدخال','حركة مكررة','لم تحدث فعلًا','سُجّلت لجهة خطأ'];
+let whyCB=null;
+function askWhy(title,sub,options,cb){
+  whyCB=cb;
+  $('#whyTitle').textContent=title;
+  $('#whySub').textContent=sub||'';
+  $('#whyText').value='';
+  $('#whyChips').innerHTML=options.map(o=>`<button type="button" data-why="${esc(o)}">${esc(o)}</button>`).join('');
+  $$('[data-why]').forEach(b=>b.onclick=()=>{
+    $$('[data-why]').forEach(x=>x.setAttribute('aria-selected',x===b));
+    $('#whyText').value=b.dataset.why;
+  });
+  $('#whyModal').classList.add('open');
+  setTimeout(()=>$('#whyText').focus(),60);
+}
+$('#whyCancel').onclick=()=>{ $('#whyModal').classList.remove('open'); whyCB=null; };
+$('#whyOk').onclick=()=>{
+  const v=$('#whyText').value.trim();
+  if(!v) return toast('اختر سببًا أو اكتبه.',true);
+  $('#whyModal').classList.remove('open');
+  const cb=whyCB; whyCB=null; cb&&cb(v);
+};
+
 /* ============ التنقل ============ */
 function go(view){
   $$('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
@@ -552,7 +686,37 @@ function go(view){
 $$('nav button').forEach(b=>b.onclick=()=>go(b.dataset.go));
 
 /* ============ الرئيسية ============ */
+/* دليل الإعداد يختفي تلقائيًا عند اكتمال خطواته */
+function renderSetup(){
+  const steps=[
+    {ok:n(ent(WH).init)>0||n(ent(WH).initDmg)>0, t:'اضبط اسم المخزن ورصيده الافتتاحي', go:'data'},
+    {ok:byType('farm').length>0,  t:'أضف المزارع', go:'data'},
+    {ok:byType('sales').length>0, t:'أضف المبايع', go:'data'},
+    {ok:byType('driver').length>0,t:'أضف السائقين', go:'data'},
+    {ok:db.txs.length>0,          t:'سجّل أول عملية', go:'ops'}
+  ];
+  const box=$('#setupGuide');
+  if(steps.every(x=>x.ok)){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="steps"><h3>خطوات التهيئة</h3>`+steps.map((x,i)=>
+    `<div class="step ${x.ok?'done':''}"><i>${x.ok?'✓':i+1}</i><span>${x.t}</span>
+       ${x.ok?'':`<button class="btn ghost sm go" data-goto="${x.go}">ابدأ</button>`}</div>`).join('')+`</div>`;
+  $$('[data-goto]').forEach(b=>b.onclick=()=>go(b.dataset.goto));
+}
+/* تنبيه النسخة الاحتياطية: أهم خطر هنا ضياع الهاتف لا خطأ الحساب */
+function renderBackupWarn(){
+  const box=$('#backupWarn'), last=db.meta?.lastBackup||0;
+  const days=last?Math.floor((Date.now()-last)/86400000):null;
+  const since=db.txs.filter(t=>t.ts>last).length;
+  if(db.txs.length===0||(last&&days<7&&since<50)){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="strip warn">
+    <div><b>خُذ نسخة احتياطية</b>${last?`آخر نسخة قبل ${days} يوم · ${fmt(since)} حركة بعدها`:'لم تأخذ أي نسخة حتى الآن. ضياع الهاتف يعني ضياع السجل كله.'}</div>
+    <button class="btn sm" id="warnBackup">تنزيل</button></div>`;
+  $('#warnBackup').onclick=()=>$('#btnBackup').click();
+}
+$('#btnQuick').onclick=()=>go('ops');
+
 function renderHome(){
+  renderSetup(); renderBackupWarn();
   const t=totals();
   $('#s-assets').textContent=fmt(t.assets);
   $('#s-wh').textContent=fmt(t.w.total);
@@ -586,25 +750,34 @@ function renderHome(){
 
 /* تفاصيل عهدة المزارع أو المبايع، والضغط على أي جهة يفتح كشف حسابها */
 function openDrill(kind){
-  const list=byType(kind).map(e=>({e,b:balanceOf(e.id)}))
-              .sort((a,b)=>Math.abs(b.b)-Math.abs(a.b));
-  const active=list.filter(x=>x.b!==0), total=list.reduce((s,x)=>s+x.b,0);
+  const all=byType(kind).map(e=>({e,b:balanceOf(e.id)}));
+  const active=all.filter(x=>x.b!==0).sort((a,b)=>Math.abs(b.b)-Math.abs(a.b));
+  const total=all.reduce((s,x)=>s+x.b,0);
   const word=kind==='farm'?'المزارع':'المبايع', one=kind==='farm'?'مزرعة':'مبيع';
+  const CAP=40, shown=active.slice(0,CAP);
   $('#drillTitle').textContent=`عهدة ${word}`;
   $('#drillBody').innerHTML=
     `<div class="dsum">
-       <span>${one==='مزرعة'?'مزارع':'مبايع'} نشطة<b>${fmt(active.length)}</b></span>
-       <span>مسجّلة<b>${fmt(list.length)}</b></span>
+       <span>${kind==='farm'?'مزارع':'مبايع'} بعهدة قائمة<b>${fmt(active.length)}</b></span>
+       <span>مسجّلة<b>${fmt(all.length)}</b></span>
        <span>إجمالي العهدة<b>${fmt(total)}</b></span>
+     </div>
+     <div style="padding:11px 14px;border-bottom:1px solid var(--line)">
+       <button type="button" class="btn ghost" id="drillSearch" style="width:100%">بحث في كل ${word} بالاسم أو الكود</button>
      </div>`
-    + (list.length ? list.map(({e,b})=>
-        `<button type="button" class="drow ${b===0?'idle':''}" data-stmt="${e.id}">
-           <div><div class="nm">${esc(e.name)}</div>
-             <div class="mt">${b===0?'لا عهدة حاليًا':'نشط'}${e.note?' · '+esc(e.note):''} · اضغط لكشف الحساب</div></div>
-           <div class="bl" style="color:${b<0?'var(--rust)':b===0?'var(--slate)':'var(--hull)'}">${fmt(b)}</div>
+    + (shown.length ? `<div class="sh-sec">أصحاب العهدة القائمة</div>` + shown.map(({e,b})=>
+        `<button type="button" class="pkrow" data-stmt="${e.id}">
+           <div><div class="nm">${esc(e.name)}${e.code?`<span class="code">${esc(e.code)}</span>`:''}</div>
+             <div class="mt">اضغط لكشف الحساب</div></div>
+           <div class="bl" style="color:${b<0?'var(--rust)':'var(--hull)'}">${fmt(b)}</div>
          </button>`).join('')
-      : `<div class="empty"><strong>لا يوجد ${one} مسجّل</strong>أضفه من تبويب البيانات.</div>`);
+      : `<div class="empty"><strong>لا عهدة قائمة</strong>كل ${one} برصيد صفر حاليًا.</div>`)
+    + (active.length>CAP?`<div class="empty" style="padding:14px"><strong>+${fmt(active.length-CAP)} أخرى</strong>استخدم زر البحث أعلاه.</div>`:'');
   $$('[data-stmt]').forEach(b=>b.onclick=()=>openStmt(b.dataset.stmt));
+  $('#drillSearch').onclick=()=>{
+    $('#drill').classList.remove('open');
+    openPicker({types:[kind],title:`ابحث في ${word}`,onPick:openStmt});
+  };
   $('#drill').classList.add('open');
 }
 function openStmt(id){
@@ -613,6 +786,10 @@ function openStmt(id){
   go('reports'); renderRepPick(); renderReport();
 }
 $$('[data-drill]').forEach(b=>b.onclick=()=>openDrill(b.dataset.drill));
+$$('[data-open]').forEach(b=>b.onclick=()=>{
+  repDate=dateKey(Date.now()); curRep='daily';
+  go('reports'); renderRepPick(); renderReport();
+});
 $('#drillClose').onclick=()=>$('#drill').classList.remove('open');
 $('#drill').addEventListener('click',e=>{if(e.target.id==='drill')$('#drill').classList.remove('open')});
 
@@ -696,38 +873,125 @@ function opts(list,ph,sel){
   return `<option value="">${ph}</option>`+list.map(e=>
     `<option value="${e.id}" ${e.id===sel?'selected':''}>${esc(e.name)} (${fmt(balanceOf(e.id))})</option>`).join('');
 }
+/* ===== منتقي الجهات بالبحث — يتعامل مع مئات المزارع =====
+   تطبيع الحروف العربية حتى يجد "ابراهيم" عند كتابة "إبراهيم" والعكس. */
+const norm=v=>String(v||'')
+  .replace(/[\u064B-\u0652\u0670\u0640]/g,'')      // تشكيل وتطويل
+  .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي')
+  .replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي')
+  .replace(/\s+/g,' ').trim().toLowerCase();
+
+/* آخر الجهات المستخدمة فعليًا — تغطي معظم الحالات بلا كتابة */
+function recentEnts(types,limit){
+  const seen=[];
+  for(const t of [...db.txs].sort((a,b)=>b.ts-a.ts)){
+    for(const id of [t.from,t.to]){
+      if(!id||seen.includes(id)) continue;
+      const e=ent(id); if(e&&types.includes(e.type)) seen.push(id);
+    }
+    if(seen.length>=(limit||6)) break;
+  }
+  return seen.slice(0,limit||6);
+}
+
+let pk={types:[],cur:'',filter:'',onPick:null};
+function openPicker(o){
+  pk={types:o.types,cur:o.current||'',filter:o.types[0],onPick:o.onPick};
+  $('#pkTitle').textContent=o.title||'اختر الجهة';
+  $('#pkQ').value='';
+  $('#picker').classList.add('open');
+  renderPicker();
+  setTimeout(()=>$('#pkQ').focus(),80);
+}
+const closePicker=()=>$('#picker').classList.remove('open');
+function renderPicker(){
+  const multi=pk.types.length>1;
+  $('#pkChips').innerHTML = multi ? pk.types.map(t=>
+    `<button type="button" data-pkt="${t}" aria-selected="${t===pk.filter}">${t==='farm'?'المزارع':t==='sales'?'المبايع':'السائقون'}</button>`).join('') : '';
+  $$('[data-pkt]').forEach(b=>b.onclick=()=>{pk.filter=b.dataset.pkt;renderPicker()});
+
+  const q=norm($('#pkQ').value);
+  const pool=byType(pk.filter);
+  const match=e=>!q||norm(e.name).includes(q)||(e.code&&norm(e.code).includes(q));
+  const hits=pool.filter(match);
+  const row=(e,sel)=>{
+    const b=e.type==='driver'?driverStats(e.id).open:balanceOf(e.id);
+    const lbl=e.type==='driver'?(b>0?`غرامة قائمة ${fmt(b)}`:'نظيف'):`عهدة ${fmt(b)}`;
+    return `<button type="button" class="pkrow" data-pk="${e.id}" aria-selected="${e.id===pk.cur}">
+      <div><div class="nm">${esc(e.name)}${e.code?`<span class="code">${esc(e.code)}</span>`:''}</div>
+        <div class="mt">${lbl}${e.note?' · '+esc(e.note):''}</div></div>
+      <div class="bl" style="color:${e.type!=='driver'&&b<0?'var(--rust)':'var(--hull)'}">${e.type==='driver'?'':fmt(b)}</div>
+    </button>`;
+  };
+  let html='';
+  if(!q){
+    const rec=recentEnts([pk.filter],6).map(id=>ent(id)).filter(Boolean);
+    if(rec.length) html+=`<div class="sh-sec">الأكثر استخدامًا حديثًا</div>`+rec.map(e=>row(e)).join('');
+  }
+  const CAP=80, shown=hits.slice(0,CAP);
+  html+=`<div class="sh-sec">${q?`نتائج البحث — ${fmt(hits.length)}`:`الكل — ${fmt(pool.length)}`}</div>`;
+  html+= shown.length ? shown.map(e=>row(e)).join('')
+    : `<div class="empty"><strong>لا نتائج</strong>${q?'جرّب حروفًا أقل، أو تأكد من الكود.':'أضف الجهة من تبويب البيانات.'}</div>`;
+  if(hits.length>CAP) html+=`<div class="empty" style="padding:16px"><strong>+${fmt(hits.length-CAP)} أخرى</strong>اكتب حروفًا أكثر لتضييق النتائج.</div>`;
+  $('#pkBody').innerHTML=html;
+  $$('[data-pk]').forEach(b=>b.onclick=()=>{ const id=b.dataset.pk; closePicker(); pk.onPick&&pk.onPick(id); });
+}
+$('#pkQ').addEventListener('input',renderPicker);
+$('#pkClose').onclick=closePicker;
+
+/* حقل يعرض الجهة المختارة ويفتح شاشة البحث */
+function pickF(base,label,curId,types,ph){
+  const e=curId?ent(curId):null;
+  return `<label>${label}</label>
+    <input type="hidden" id="${base}" value="${curId||''}">
+    <button type="button" class="pickfield" id="${base}-btn" data-types="${types.join(',')}"
+            data-label="${esc(label)}" data-ph="${esc(ph||'اختر الجهة')}">
+      <span class="pf-n ${e?'':'ph'}">${e?esc(e.name):esc(ph||'اختر الجهة')}</span>
+      <span class="pf-b">${e&&e.type!=='driver'?fmt(balanceOf(curId)):''}</span>
+      <span class="pf-i">بحث ›</span>
+    </button>`;
+}
+function bindPickers(){
+  $$('.pickfield').forEach(btn=>{
+    const base=btn.id.replace(/-btn$/,''), hid=$('#'+base);
+    btn.onclick=()=>openPicker({
+      types:btn.dataset.types.split(','), current:hid.value, title:btn.dataset.label,
+      onPick:id=>{
+        const e=ent(id);
+        hid.value=id;
+        btn.querySelector('.pf-n').textContent=e.name;
+        btn.querySelector('.pf-n').classList.remove('ph');
+        btn.querySelector('.pf-b').textContent=e.type!=='driver'?fmt(balanceOf(id)):'';
+        hid.dispatchEvent(new Event('change')); hid.dispatchEvent(new Event('input'));
+      }});
+  });
+}
 function driverSel(req,sel){
   const d=byType('driver');
-  return `<label for="f-driver">السائق${req?'':' (اختياري)'}</label>
-   <select id="f-driver" ${req?'required':''}>${d.length?`<option value="">اختر السائق</option>`+d.map(e=>`<option value="${e.id}" ${e.id===sel?'selected':''}>${esc(e.name)}</option>`).join(''):`<option value="">— أضف سائقًا من تبويب البيانات —</option>`}</select>`;
+  if(!d.length) return `<label>السائق</label><div class="hint" style="margin-top:0">أضف سائقًا من تبويب البيانات أولًا.</div>
+    <input type="hidden" id="f-driver" value="">`;
+  // عدد قليل من السائقين: أزرار بلمسة واحدة. عدد كبير: بحث.
+  if(d.length<=12){
+    return `<label>السائق${req?'':' (اختياري)'}</label>
+      <div class="chips" id="drvChips">${d.map(e=>
+        `<button type="button" data-drv="${e.id}" aria-selected="${e.id===sel}">${esc(e.name)}</button>`).join('')}</div>
+      <input type="hidden" id="f-driver" value="${sel||''}">`;
+  }
+  return pickF('f-driver','السائق'+(req?'':' (اختياري)'),sel,['driver'],'اختر السائق');
 }
 const qtyF=(id,lbl,val)=>`<label for="${id}">${lbl}</label><input id="${id}" type="number" min="0" step="1" value="${val??''}" inputmode="numeric">`;
-/* اختيار الجهة على خطوتين: النوع أولًا (مزرعة/مبيع) ثم الاسم من قائمة مفلترة */
-function entPickF(base,label,curId){
-  const t=curId?ent(curId)?.type:'';
-  return `<label for="${base}-kind">${label}</label>
-    <select id="${base}-kind" required>
-      <option value="">اختر النوع…</option>
-      <option value="farm" ${t==='farm'?'selected':''}>مزرعة</option>
-      <option value="sales" ${t==='sales'?'selected':''}>مبيع</option>
-    </select>
-    <select id="${base}" required data-cur="${curId||''}" style="margin-top:8px" ${t?'':'hidden'}></select>`;
-}
-function bindEntPick(base){
-  const k=$('#'+base+'-kind'), s=$('#'+base);
-  if(!k||!s) return;
-  const fill=()=>{
-    const t=k.value;
-    s.hidden=!t;
-    if(!t){ s.innerHTML=''; return; }
-    s.innerHTML=opts(byType(t), t==='farm'?'اختر المزرعة':'اختر المبيع', s.dataset.cur);
-    s.dataset.cur='';
-  };
-  k.addEventListener('change',()=>{ fill(); s.dispatchEvent(new Event('change')); s.dispatchEvent(new Event('input')); });
-  fill();
-}
-const whenF=()=>`<label for="f-when">وقت الحركة</label><input id="f-when" type="datetime-local" value="${toInput(editing?editing.ts:Date.now())}">
-  <div class="hint">اضبطه على وقت الحركة الفعلي إن كنت تسجّلها لاحقًا.</div>`;
+/* الوقت مطوي: سطر يوضّح الوقت الحالي، ويتوسّع عند الحاجة فقط */
+const whenF=()=>{
+  const ts=editing?editing.ts:Date.now(), op=!!editing;
+  return `<div class="hint" id="whenLine" style="margin-top:14px;display:${op?'none':'flex'};gap:8px;align-items:center;flex-wrap:wrap">
+      <span>وقت الحركة: <b class="num">${fmtDT(ts)}</b></span>
+      <button type="button" class="btn ghost sm" id="whenEdit">تغيير</button></div>
+    <div id="whenBox" style="display:${op?'block':'none'}">
+      <label for="f-when">وقت الحركة</label>
+      <input id="f-when" type="datetime-local" value="${toInput(ts)}">
+      <div class="hint">اضبطه على وقت الحركة الفعلي إن كنت تسجّلها لاحقًا.</div>
+    </div>`;
+};
 /* سبب التلف يظهر للمبايع فقط، لأن التالف الراجع من المزرعة لا يُحتسب على السائق */
 const reasonF=()=>`<div id="reasonWrap" hidden><label for="f-reason">سبب التلف</label>
     <select id="f-reason">
@@ -751,36 +1015,36 @@ function renderOpForm(){
 
   if(curOp==='outbound'){
     h=`<div class="hint">المتاح للصرف الآن: <b class="num">${fmt(w.good)}</b> بكش سليم.</div>
-      ${entPickF('f-to','الجهة المستلمة',V('to'))}
+      ${pickF('f-to','الجهة المستلمة',V('to'),['farm','sales'],'اختر مزرعة أو مبيع')}
       ${qtyF('f-good','عدد البكش السليم',V('good'))}${driverSel(true,V('driver'))}`;
   }
   else if(curOp==='sale'){
-    h=`<label for="f-from">المزرعة</label><select id="f-from" required>${opts(byType('farm'),'اختر المزرعة',V('from'))}</select>
-      <label for="f-to">المبيع</label><select id="f-to" required>${opts(byType('sales'),'اختر المبيع',V('to'))}</select>
+    h=`${pickF('f-from','المزرعة',V('from'),['farm'],'اختر المزرعة')}
+      ${pickF('f-to','المبيع',V('to'),['sales'],'اختر المبيع')}
       ${qtyF('f-good','عدد البكش',V('good'))}${driverSel(true,V('driver'))}`;
   }
   else if(curOp==='empty'){
-    h=`<label for="f-from">المبيع</label><select id="f-from" required>${opts(byType('sales'),'اختر المبيع',V('from'))}</select>
-      <label for="f-to">المزرعة</label><select id="f-to" required>${opts(byType('farm'),'اختر المزرعة',V('to'))}</select>
+    h=`${pickF('f-from','المبيع',V('from'),['sales'],'اختر المبيع')}
+      ${pickF('f-to','المزرعة',V('to'),['farm'],'اختر المزرعة')}
       ${qtyF('f-good','عدد البكش الفارغ',V('good'))}${driverSel(true,V('driver'))}`;
   }
   else if(curOp==='inbound'){
-    h=`${entPickF('f-from','الجهة المورِّدة',V('from'))}
-      <div class="row two"><div>${qtyF('f-good','سليم',V('good'))}</div><div>${qtyF('f-damaged','تالف',n(V('damaged',0)))}</div></div>
+    h=`${pickF('f-from','الجهة المورِّدة',V('from'),['farm','sales'],'اختر مزرعة أو مبيع')}
+      <div class="row two"><div>${qtyF('f-good','<span class="lg g"></span>سليم',V('good'))}</div><div>${qtyF('f-damaged','<span class="lg d"></span>تالف',n(V('damaged',0)))}</div></div>
       ${reasonF()}
       ${driverSel(true,V('driver'))}`;
   }
   else if(curOp==='f2f'){
-    h=`<label for="f-from">المزرعة المرسِلة</label><select id="f-from" required>${opts(byType('farm'),'اختر المزرعة',V('from'))}</select>
-      <label for="f-to">المزرعة المستلمة</label><select id="f-to" required>${opts(byType('farm'),'اختر المزرعة',V('to'))}</select>
+    h=`${pickF('f-from','المزرعة المرسِلة',V('from'),['farm'],'اختر المزرعة')}
+      ${pickF('f-to','المزرعة المستلمة',V('to'),['farm'],'اختر المزرعة')}
       ${qtyF('f-good','عدد البكش',V('good'))}${driverSel(true,V('driver'))}`;
   }
   else if(curOp==='settle'){
     h=`<div class="hint">أدخل الراجع للمخزن والمتبقي عند الجهة بعد العد، ويحسب التطبيق الفاقد وينبّهك به.</div>
-      ${entPickF('f-from','الجهة',V('from'))}
+      ${pickF('f-from','الجهة',V('from'),['farm','sales'],'اختر مزرعة أو مبيع')}
       <div class="row two">
-        <div>${qtyF('f-good','راجع للمخزن — سليم',n(V('good',0)))}</div>
-        <div>${qtyF('f-damaged','راجع للمخزن — تالف',n(V('damaged',0)))}</div>
+        <div>${qtyF('f-good','<span class="lg g"></span>راجع للمخزن — سليم',n(V('good',0)))}</div>
+        <div>${qtyF('f-damaged','<span class="lg d"></span>راجع للمخزن — تالف',n(V('damaged',0)))}</div>
       </div>
       ${reasonF()}
       ${qtyF('f-remain','المتبقي عند الجهة بعد العد',V('remain'))}
@@ -806,7 +1070,15 @@ function renderOpForm(){
   }
   f.innerHTML=h+whenF()+`<button type="submit" class="btn block">${editing?'حفظ التعديل':'تسجيل '+TX[curOp].ar}</button>`;
 
-  bindEntPick('f-from'); bindEntPick('f-to');
+  bindPickers();
+  if($('#whenEdit')) $('#whenEdit').onclick=()=>{
+    $('#whenLine').style.display='none'; $('#whenBox').style.display='block'; $('#f-when').focus();
+  };
+  $$('[data-drv]').forEach(b=>b.onclick=()=>{
+    const h=$('#f-driver'), same=h.value===b.dataset.drv;
+    h.value=same?'':b.dataset.drv;
+    $$('[data-drv]').forEach(x=>x.setAttribute('aria-selected', x.dataset.drv===h.value));
+  });
   if(curOp==='inbound'||curOp==='settle'){
     $('#f-damaged').addEventListener('input',syncReason);
     $('#f-from').addEventListener('change',syncReason);
@@ -898,13 +1170,13 @@ $('#opForm').addEventListener('submit',e=>{
   if(editing){
     const before=Object.assign({},editing);
     const after=Object.assign({},blank,o,{id:editing.id});
-    const why=prompt('سبب التعديل (يُحفظ في سجل التغييرات):','تصحيح إدخال');
-    if(why===null) return;
-    const i=db.txs.findIndex(t=>t.id===editing.id);
-    db.txs[i]=after;
-    logAudit('edit',before,after,why.trim());
-    editing=null; save(); renderAll();
-    toast('حُفظ التعديل وسُجّل في سجل التغييرات.');
+    askWhy('سبب التعديل',txSummary(before),WHY_EDIT,why=>{
+      const i=db.txs.findIndex(t=>t.id===before.id);
+      db.txs[i]=after;
+      logAudit('edit',before,after,why);
+      editing=null; save(); renderAll();
+      toast('حُفظ التعديل وسُجّل في سجل التغييرات.');
+    });
   }else{
     addTx(o);
     toast(o.type==='settle'&&n(o.lost)>0
@@ -924,13 +1196,18 @@ function startEdit(id){
 }
 function voidTx(id){
   const t=db.txs.find(x=>x.id===id); if(!t) return;
-  const why=prompt(`إلغاء هذه الحركة:\n${txSummary(t)}\n\nاكتب سبب الإلغاء (يُحفظ في سجل التغييرات):`,'');
-  if(why===null) return;
-  if(!why.trim()) return toast('الإلغاء يحتاج سببًا مكتوبًا.',true);
-  logAudit('delete',t,null,why.trim());
-  db.txs=db.txs.filter(x=>x.id!==id);
-  if(editing&&editing.id===id) editing=null;
-  save(); renderAll(); toast('أُلغيت الحركة وحُفظ سببها في سجل التغييرات.');
+  askWhy('سبب إلغاء الحركة',txSummary(t),WHY_VOID,why=>{
+    const copy=Object.assign({},t);
+    logAudit('delete',t,null,why);
+    db.txs=db.txs.filter(x=>x.id!==id);
+    if(editing&&editing.id===id) editing=null;
+    save(); renderAll();
+    toast('أُلغيت الحركة.',false,()=>{               // تراجع فوري خلال ثوانٍ
+      db.txs.push(copy);
+      db.audit=db.audit.filter(a=>!(a.action==='delete'&&a.txId===copy.id));
+      save(); renderAll(); toast('رجعت الحركة كما كانت.');
+    });
+  });
 }
 
 /* سجل العمليات: الوصول لأي حركة سابقة لتعديلها أو إلغائها من نفس التبويب */
@@ -965,21 +1242,33 @@ function renderData(){
   $('#whInitDmg').value=n(ent(WH).initDmg);
   $('#verLine').textContent=`الإصدار ${APP_VER} · ${db.txs.length} حركة · ${db.audit.length} تغيير مسجّل`;
 
-  // كل فئة في قائمة مستقلة
+  // كل فئة في قائمة مستقلة مع بحث، وعرض محدود حتى لا تثقل الصفحة مع مئات الجهات
+  const CAP=40;
   ['farm','sales','driver'].forEach(type=>{
-    const list=byType(type), isDrv=type==='driver';
-    $('#list-'+type).innerHTML = list.length ? list.map(e=>{
+    const isDrv=type==='driver', q=norm($('#q-'+type)?.value), all=byType(type);
+    const hits=q?all.filter(e=>norm(e.name).includes(q)||(e.code&&norm(e.code).includes(q))):all;
+    const shown=hits.slice(0,CAP);
+    const rowHtml=e=>{
       const meta=isDrv
         ? (()=>{const st=driverStats(e.id);return `غرامة إهمال قائمة: <b class="num">${fmt(st.open)}</b> · رحلات <span class="num">${fmt(st.trips)}</span>`})()
         : `الرصيد الحالي: <b class="num">${fmt(balanceOf(e.id))}</b> · افتتاحي <span class="num">${fmt(e.init)}</span>`;
       return `<div class="tx">
         <div class="badge" aria-hidden="true">${isDrv?'☗':(type==='farm'?'⌂':'⌗')}</div>
-        <div class="body"><div class="t1">${esc(e.name)}</div>
+        <div class="body"><div class="t1">${esc(e.name)}${e.code?`<span class="code">${esc(e.code)}</span>`:''}</div>
           <div class="t2">${meta}${e.note?' · '+esc(e.note):''}</div></div>
         <div class="acts"><button class="btn ghost sm" data-edit="${e.id}">تعديل</button>
           <button class="btn ghost sm" data-del="${e.id}" style="color:var(--rust)">حذف</button></div>
-      </div>`;}).join('')
-      : `<div class="empty"><strong>لا يوجد ${TYPE_AR[type]} مسجّل</strong>اضغط زر الإضافة أعلاه.</div>`;
+      </div>`;
+    };
+    let html='';
+    if(all.length>CAP) html+=`<div class="dsum" style="justify-content:center">${fmt(all.length)} ${TYPE_AR[type]} مسجّل${q?` · ${fmt(hits.length)} نتيجة`:''} — استخدم البحث للوصول السريع</div>`;
+    html += shown.length ? shown.map(rowHtml).join('')
+      : `<div class="empty"><strong>${q?'لا نتائج مطابقة':'لا يوجد '+TYPE_AR[type]+' مسجّل'}</strong>${q?'جرّب حروفًا أقل أو ابحث بالكود.':'اضغط زر الإضافة.'}</div>`;
+    if(hits.length>CAP) html+=`<div class="empty" style="padding:14px"><strong>+${fmt(hits.length-CAP)} أخرى</strong>اكتب في البحث لتضييق القائمة.</div>`;
+    $('#list-'+type).innerHTML=html;
+
+    const box=$('#q-'+type);
+    if(box && !box._bound){ box._bound=1; box.addEventListener('input',renderData); }
   });
   $$('[data-edit]').forEach(b=>b.onclick=()=>openEntity(null,b.dataset.edit));
   $$('[data-del]').forEach(b=>b.onclick=()=>delEntity(b.dataset.del));
@@ -996,6 +1285,7 @@ function openEntity(type,id){
   const e=id?ent(id):null, t=e?e.type:type;
   $('#e-id').value=id||''; $('#e-type').value=t;
   $('#e-name').value=e?e.name:''; $('#e-init').value=e?n(e.init):0; $('#e-note').value=e?(e.note||''):'';
+  $('#e-code').value=e?(e.code||''):'';
   $('#modalTitle').textContent=(e?'تعديل ':'إضافة ')+TYPE_AR[t];
   $('#e-balwrap').hidden=(t==='driver');
   $('#e-balhint').textContent=t==='sales'?'يمكن أن يكون الرصيد سالبًا إذا كان المبيع مدينًا لك ببكش.':'عدد البكش الموجود عند هذه الجهة قبل تسجيل أي حركة.';
@@ -1012,8 +1302,9 @@ $('#entityForm').addEventListener('submit',e=>{
   const id=$('#e-id').value, type=$('#e-type').value, nm=$('#e-name').value.trim();
   if(!nm) return toast('اكتب الاسم.',true);
   const init=type==='driver'?0:n($('#e-init').value), note=$('#e-note').value.trim();
-  if(id){ Object.assign(ent(id),{name:nm,init,note}); toast('حُفظ التعديل.'); }
-  else{ db.entities.push({id:uid(),name:nm,type,init,note}); toast(`أُضيف ${TYPE_AR[type]} «${nm}».`); }
+  const code=$('#e-code').value.trim();
+  if(id){ Object.assign(ent(id),{name:nm,init,note,code}); toast('حُفظ التعديل.'); }
+  else{ db.entities.push({id:uid(),name:nm,type,init,note,code}); toast(`أُضيف ${TYPE_AR[type]} «${nm}».`); }
   save(); closeModal(); renderAll();
 });
 function delEntity(id){
@@ -1030,6 +1321,7 @@ $('#btnBackup').onclick=()=>{
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download=`baksha-backup-${dateKey(Date.now())}.json`;
   a.click(); URL.revokeObjectURL(a.href);
+  db.meta=db.meta||{}; db.meta.lastBackup=Date.now(); save(); renderHome();
   toast('نُزّلت النسخة الاحتياطية.');
 };
 $('#btnRestore').onclick=()=>$('#fileInput').click();
@@ -1136,9 +1428,9 @@ function renderReport(){
 
   else if(curRep==='stmt'){
     c.style.display='block';
-    const list=byType('farm','sales');
-    c.innerHTML=`<label for="r-ent">الجهة</label><select id="r-ent">${list.length?`<option value="">اختر مزرعة أو مبيع</option>`+list.map(e=>`<option value="${e.id}" ${e.id===repEntity?'selected':''}>${esc(e.name)} — ${TYPE_AR[e.type]}</option>`).join(''):`<option value="">— لا توجد جهات مسجّلة —</option>`}</select>`+rangeCtl();
-    $('#r-ent').onchange=e=>{repEntity=e.target.value;renderReport()}; bindRange();
+    c.innerHTML=`${pickF('r-ent','الجهة',repEntity,['farm','sales'],'اختر مزرعة أو مبيع')}`+rangeCtl()+filterBar();
+    bindPickers(); bindRange(); bindFilterBar();
+    $('#r-ent').addEventListener('change',e=>{repEntity=e.target.value;renderReport()});
     const e0=ent(repEntity);
     if(!e0){ s.innerHTML=sheetHead('كشف حساب','')+`<div class="empty"><strong>اختر جهة</strong>سيظهر هنا كل ما خرج إليها وما رجع منها.</div>`; return; }
     const all=db.txs.filter(t=>t.from===e0.id||t.to===e0.id).sort((a,b)=>a.ts-b.ts);
@@ -1186,7 +1478,7 @@ function renderReport(){
   }
 
   else if(curRep==='all'){
-    c.style.display='block'; c.innerHTML=rangeCtl(); bindRange();
+    c.style.display='block'; c.innerHTML=rangeCtl()+filterBar(); bindRange(); bindFilterBar();
     const list=db.txs.filter(t=>inRange(t)&&matchQ(t)).sort((a,b)=>b.ts-a.ts);
     const filtered=(repFrom||repTo||repQ)?` · ${list.length} من ${db.txs.length}`:'';
     s.innerHTML=sheetHead('كل الحركات',`${db.txs.length} حركة مسجّلة${filtered}`)+(list.length?`
@@ -1219,6 +1511,19 @@ function renderReport(){
       </table></div><p class="hint" style="padding:0 14px 14px">هذا السجل للمراجعة فقط ولا يؤثر على الأرصدة.</p>`
       :`<div class="empty"><strong>لا تغييرات</strong>لم تُعدَّل أو تُلغَ أي حركة حتى الآن.</div>`);
   }
+}
+/* شريط يوضّح أن التقرير مفلتر، حتى لا يُقرأ جزء كأنه الكل */
+function filterBar(){
+  if(!(repFrom||repTo||repQ)) return '';
+  const bits=[];
+  if(repFrom||repTo) bits.push(`الفترة ${repFrom||'البداية'} ← ${repTo||'اليوم'}`);
+  if(repQ) bits.push(`بحث: «${esc(repQ)}»`);
+  return `<div class="filterbar no-print"><span>هذا التقرير مفلتر — ${bits.join(' · ')}</span>
+    <button type="button" class="btn ghost sm" id="clearFilter">مسح</button></div>`;
+}
+function bindFilterBar(){
+  const b=$('#clearFilter');
+  if(b) b.onclick=()=>{ repFrom=''; repTo=''; repQ=''; renderReport(); };
 }
 function sheetHead(title,sub){
   return `<div class="rh"><h3>${title}</h3><p>${sub?sub+' · ':''}صدر في <span class="num">${fmtDT(Date.now())}</span> — ${esc(ent(WH).name)}</p></div>`;
