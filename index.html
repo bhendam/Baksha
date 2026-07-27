@@ -175,6 +175,9 @@ label .lg.g{background:var(--catch)}label .lg.d{background:var(--rust)}
 .tx .t2{font-size:.78rem;color:var(--slate);margin-top:2px;word-break:break-word}
 .tx .qty{margin-inline-start:auto;text-align:end;font-weight:700;white-space:nowrap}
 .tx .qty small{display:block;font-weight:500;font-size:.7rem;color:var(--rust)}
+.tx.dead{background:#FAFBFC}
+.tx.dead .t1,.tx.dead .qty{text-decoration:line-through;color:var(--slate)}
+.tx.dead .badge{background:#F0F2F4;color:var(--slate)}
 .tx .acts{display:flex;flex-direction:column;gap:7px;margin-inline-start:8px;flex:0 0 auto}
 .empty{padding:30px 18px;text-align:center;color:var(--slate)}
 .empty strong{display:block;color:var(--hull);font-family:var(--ff-dis);font-size:1.02rem;margin-bottom:4px}
@@ -383,7 +386,9 @@ nav button[aria-current=page]{color:var(--tide)}
       <p class="hint" style="margin-top:0">البيانات محفوظة داخل هذا المتصفح فقط. خُذ نسخة احتياطية بانتظام واحفظها خارج الجهاز.</p>
       <div class="btnrow">
         <button class="btn" id="btnBackup">تنزيل نسخة احتياطية</button>
-        <button class="btn ghost" id="btnRestore">استعادة من ملف</button>
+        <button class="btn ghost" id="btnCsv">تصدير CSV للمحاسب</button>
+        <button class="btn ghost" id="btnRestore">استعادة (استبدال)</button>
+        <button class="btn ghost" id="btnMerge">دمج من ملف</button>
         <button class="btn ghost" id="btnWipe" style="color:var(--rust);border-color:#f0d3cc">حذف كل البيانات</button>
       </div>
       <input type="file" id="fileInput" accept=".json,application/json" hidden>
@@ -468,80 +473,46 @@ nav button[aria-current=page]{color:var(--tide)}
 
 <script>
 /* =====================================================================
-   سجل البكش — منطق التطبيق
+   سجل البكش — الإصدار 3
    ---------------------------------------------------------------------
-   المبدأ: لا نخزّن أي رصيد كرقم ثابت. نخزّن "دفتر حركات" (Ledger)
-   ونحسب كل رصيد من مجموع الحركات في كل مرة، فيبقى كل رقم قابلًا
-   للتفسير من تاريخه ولا يمكن أن يتعارض مع الدفتر.
+   الطبقة الخلفية:
+   • التخزين: IndexedDB (حصة أكبر بمراحل من localStorage) بكتابة سجل
+     واحد لكل عملية بدل إعادة كتابة القاعدة كلها.
+   • الكتابة ذرّية: الذاكرة لا تتغيّر إلا بعد نجاح الكتابة على القرص.
+   • الدفتر append-only: لا يُحذف سجل ولا يُعدَّل في مكانه. الإلغاء
+     يوسم السجل بـ status='void' مع voidedAt، والتعديل يُلغي القديم
+     ويضيف سجلًا جديدًا يشير إليه بـ replaces. لذلك يمكن حساب رصيد
+     أي يوم مضى كما كان في الدفتر يومها.
+   • الأرصدة تُحسب في مرور واحد على الدفتر وتُخزَّن مؤقتًا، فتُبطَل
+     عند أي تغيير فقط.
 
    قاعدة الحساب لأي جهة (مزرعة / مبيع / مصنع):
-       الرصيد = الرصيد الافتتاحي
-              + مجموع (سليم + تالف) لكل حركة إليه  (to = id)
-              − مجموع (سليم + تالف) لكل حركة منه   (from = id)
-
-   المخزن حالة خاصة: نفصل السليم عن التالف لأن التالف يُرسل للمصنع.
-       سليم = افتتاحي سليم + توريد راجع(سليم) + شراء + بديل من المصنع − صرف
-       تالف = افتتاحي تالف + توريد راجع(تالف) − إرسال تالف للمصنع
-
-   إجمالي الأصول = سليم المخزن + تالف المخزن + المزارع + المبايع + المصنع
-       يزيد بـ: الشراء الجديد، وزيادة الجرد.
-       ينقص بـ: الفاقد الناتج عن الجرد والتسوية.
-       باقي العمليات نقل داخلي: لا تغيّر الإجمالي.
-
-   الجرد والتسوية (settle): عملية واحدة للمزرعة والمبيع معًا، ترجّع
-   البكش من الجهة إلى المخزن سليمًا وتالفًا، وتحسب الفاقد بالفرق:
-       الفاقد = الرصيد الدفتري − (الراجع سليم + تالف) − المتبقي عند الجهة
-   الفاقد يخرج من الجهة ولا يدخل المخزن، فينقص إجمالي الأصول بمقداره،
-   ولهذا يُطلب تأكيد صريح من المستخدم قبل تسجيله.
-   قيمة سالبة للفاقد تعني زيادة جرد تُضاف للعهدة وللأصول.
-
-   التعديل والحذف: لا يُمحى شيء بصمت. كل تعديل أو حذف يُسجَّل في
-   سجل التغييرات (audit) بالقيم قبل وبعد وسبب التغيير.
+       الرصيد = الافتتاحي + Σ(سليم+تالف) إليه − Σ(سليم+تالف+فاقد) منه
+   المخزن: سليم وتالف منفصلان لأن التالف يُرسل للمصنع.
+   إجمالي الأصول يزيد بالشراء وزيادة الجرد، وينقص بفاقد الجرد فقط.
    ===================================================================== */
 
-const KEY='baksha.ledger.v1', WH='WH', FAC='FAC', APP_VER='2.0';
+const APP_VER='3.0', SCHEMA=3, WH='WH', FAC='FAC';
+const LS_KEY='baksha.ledger.v1';           // مصدر الترقية من الإصدار السابق
+const DB_NAME='baksha', DB_VER=1;
+const STORES=['entities','txs','audit','kv'];
+const MAXQ=1000000;                        // حد أعلى لأي كمية
 
-let db = load();
-
-function seed(){
-  return {
-    entities:[
-      {id:WH, name:'المخزن الرئيسي', type:'warehouse', init:0, initDmg:0, note:''},
-      {id:FAC,name:'المصنع',        type:'factory',   init:0, note:'استبدال التالف'}
-    ],
-    txs:[], audit:[], meta:{created:Date.now(), version:2}
-  };
-}
-function load(){
-  try{
-    const raw = localStorage.getItem(KEY);
-    if(!raw) return seed();
-    const d = JSON.parse(raw);
-    if(!d || !Array.isArray(d.entities) || !Array.isArray(d.txs)) return seed();
-    if(!Array.isArray(d.audit)) d.audit=[];              // ترقية من الإصدار الأول
-    if(!d.meta) d.meta={created:Date.now()};
-    d.meta.version=2;
-    if(!d.entities.find(e=>e.id===WH))  d.entities.unshift({id:WH,name:'المخزن الرئيسي',type:'warehouse',init:0,initDmg:0,note:''});
-    if(!d.entities.find(e=>e.id===FAC)) d.entities.push({id:FAC,name:'المصنع',type:'factory',init:0,note:''});
-    const w=d.entities.find(e=>e.id===WH);
-    if(w.initDmg==null) w.initDmg=0;                     // ترقية: فصل التالف الافتتاحي
-    return d;
-  }catch(err){ return seed(); }
-}
-function save(){
-  try{ localStorage.setItem(KEY, JSON.stringify(db)); }
-  catch(err){ toast('لم يُحفظ التغيير: مساحة التخزين ممتلئة. نزّل نسخة احتياطية ثم احذف بيانات قديمة.', true); }
-}
-
-/* ------------------------- أدوات ------------------------- */
+/* ===================== أدوات عامة ===================== */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-const n=v=>Number(v)||0;
+/* كل الكميات أعداد صحيحة داخل حدود معقولة — يمنع الكسور و1e9 بالخطأ */
+function num(v){ let x=Number(v); if(!isFinite(x)) return 0; x=Math.trunc(x); return Math.max(-MAXQ,Math.min(MAXQ,x)); }
+/* الأوقات والتسلسل تتجاوز سقف الكميات، فلها دالة بلا سقف */
+function int(v){ const x=Math.trunc(Number(v)); return isFinite(x)?x:0; }
+const n=num;
 const fmt=v=>(v<0?'−':'')+Math.abs(Math.round(v)).toLocaleString('en-US');
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ent=id=>db.entities.find(e=>e.id===id);
-const nameOf=id=>id?(ent(id)?.name||'—'):'—';
-const byType=(...t)=>db.entities.filter(e=>t.includes(e.type)).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+const norm=v=>String(v||'')
+  .replace(/[\u064B-\u0652\u0670\u0640]/g,'')
+  .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي')
+  .replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي')
+  .replace(/\s+/g,' ').trim().toLowerCase();
 
 const AR_DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 const d2=x=>String(x).padStart(2,'0');
@@ -565,50 +536,310 @@ function toast(msg,isErr,undoFn){
   box.appendChild(el);
   requestAnimationFrame(()=>el.classList.add('show'));
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>{el.classList.remove('show');setTimeout(()=>box.innerHTML='',300)},4200);
+  toastTimer=setTimeout(()=>{el.classList.remove('show');setTimeout(()=>box.innerHTML='',300)},undoFn?6500:4200);
 }
 
-/* ============ أنواع الحركات ============ */
+/* ===================== طبقة التخزين ===================== */
+/* IndexedDB أولًا. إن تعذّر (وضع خاص مثلًا) نرجع لـ localStorage
+   بنفس الواجهة، مع تنبيه المستخدم أن السعة محدودة. */
+let idb=null, lsFallback=false;
+
+function openIDB(){
+  return new Promise((res,rej)=>{
+    if(!('indexedDB' in window)) return rej('unsupported');
+    const rq=indexedDB.open(DB_NAME,DB_VER);
+    rq.onupgradeneeded=()=>{
+      const d=rq.result;
+      if(!d.objectStoreNames.contains('entities')) d.createObjectStore('entities',{keyPath:'id'});
+      if(!d.objectStoreNames.contains('txs')){
+        const st=d.createObjectStore('txs',{keyPath:'id'});
+        st.createIndex('ts','ts'); st.createIndex('seq','seq');
+      }
+      if(!d.objectStoreNames.contains('audit')) d.createObjectStore('audit',{keyPath:'id'});
+      if(!d.objectStoreNames.contains('kv')) d.createObjectStore('kv',{keyPath:'k'});
+    };
+    rq.onsuccess=()=>res(rq.result);
+    rq.onerror=()=>rej(rq.error);
+  });
+}
+function idbAll(store){
+  return new Promise((res,rej)=>{
+    const tx=idb.transaction(store,'readonly'), rq=tx.objectStore(store).getAll();
+    rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error);
+  });
+}
+/* كتابة كل العمليات في معاملة واحدة: تنجح كلها أو تفشل كلها */
+function idbWrite(ops){
+  if(lsFallback) return lsWrite(ops);
+  return new Promise((res,rej)=>{
+    const stores=[...new Set(ops.map(o=>o.store))];
+    const tx=idb.transaction(stores,'readwrite');
+    tx.oncomplete=()=>res(true);
+    tx.onerror=()=>rej(tx.error);
+    tx.onabort=()=>rej(tx.error||'abort');
+    for(const o of ops){
+      const st=tx.objectStore(o.store);
+      if(o.action==='put') st.put(o.rec);
+      else if(o.action==='del') st.delete(o.key);
+      else if(o.action==='clear') st.clear();
+    }
+  });
+}
+/* بديل localStorage — يحفظ الصورة كاملة، ويُستخدم فقط عند تعذّر IndexedDB */
+function lsWrite(ops){
+  return new Promise((res,rej)=>{
+    try{
+      const snap={entities:db.entities,txs:db.txs,audit:db.audit,meta:db.meta,_pending:ops};
+      // نطبّق العمليات على نسخة مؤقتة لنحفظ الصورة الصحيحة
+      const clone=JSON.parse(JSON.stringify({entities:db.entities,txs:db.txs,audit:db.audit,meta:db.meta}));
+      applyOps(ops,clone);
+      localStorage.setItem(LS_KEY,JSON.stringify(clone));
+      res(true);
+    }catch(e){ rej(e); }
+  });
+}
+/* تطبيق العمليات على كائن في الذاكرة */
+function applyOps(ops,target){
+  for(const o of ops){
+    if(o.store==='kv'){
+      if(o.action==='put') target.meta[o.rec.k]=o.rec.v;
+      else if(o.action==='clear') target.meta={};
+      continue;
+    }
+    const key=o.store==='entities'?'entities':o.store==='txs'?'txs':'audit';
+    if(o.action==='clear'){ target[key]=[]; continue; }
+    if(o.action==='del'){ target[key]=target[key].filter(x=>x.id!==o.key); continue; }
+    const i=target[key].findIndex(x=>x.id===o.rec.id);
+    if(i>=0) target[key][i]=o.rec; else target[key].push(o.rec);
+  }
+}
+
+/* الذاكرة العاملة */
+let db={entities:[],txs:[],audit:[],meta:{}};
+
+/* الكتابة الذرّية: احفظ أولًا، ثم بدّل الذاكرة، ثم أعد الرسم */
+async function commit(ops){
+  try{
+    await idbWrite(ops);
+    applyOps(ops,db);
+    invalidate();
+    renderAll();
+    return true;
+  }catch(e){
+    console.error(e);
+    toast(lsFallback
+      ? 'لم يُحفظ التغيير: مساحة التخزين ممتلئة. نزّل نسخة احتياطية.'
+      : 'لم يُحفظ التغيير على القرص، فلم يُطبَّق. أعد المحاولة أو أعد تشغيل التطبيق.', true);
+    return false;
+  }
+}
+const putTx    = t=>({store:'txs',    action:'put', rec:t});
+const putEnt   = e=>({store:'entities',action:'put', rec:e});
+const putAud   = a=>({store:'audit',  action:'put', rec:a});
+const delAud   = id=>({store:'audit', action:'del', key:id});
+const delEnt   = id=>({store:'entities',action:'del',key:id});
+const putKV    = (k,v)=>({store:'kv', action:'put', rec:{k,v}});
+
+/* رقم تسلسلي متزايد يوضّح ترتيب الإدخال الحقيقي */
+function nextSeq(){ return int(db.meta.seq||0)+1; }
+
+/* ===================== الترقية ===================== */
+/* سلاسل ترقية مرقّمة: أي نسخة احتياطية قديمة تُرقّى خطوة خطوة */
+const MIGRATIONS={
+  2:d=>{                                       // 1 → 2
+    d.audit=d.audit||[];
+    const w=d.entities.find(e=>e.id===WH); if(w&&w.initDmg==null) w.initDmg=0;
+  },
+  3:d=>{                                       // 2 → 3
+    let seq=0;
+    for(const t of d.txs){
+      t.status = t.status || 'active';
+      t.createdAt = t.createdAt || t.ts;
+      t.seq = t.seq || ++seq;
+      if(t.lost==null) t.lost=0;
+      if(t.remain===undefined) t.remain=null;
+    }
+    d.meta=d.meta||{}; d.meta.seq=Math.max(int(d.meta.seq),seq);
+  }
+};
+function migrate(d){
+  let from=int(d.meta?.schema)||int(d.meta?.version)||1;
+  for(let v=from+1; v<=SCHEMA; v++) if(MIGRATIONS[v]) MIGRATIONS[v](d);
+  d.meta=d.meta||{}; d.meta.schema=SCHEMA;
+  return d;
+}
+function systemEntities(d){
+  if(!d.entities.find(e=>e.id===WH))  d.entities.unshift({id:WH,name:'المخزن الرئيسي',type:'warehouse',init:0,initDmg:0,note:'',code:''});
+  if(!d.entities.find(e=>e.id===FAC)) d.entities.push({id:FAC,name:'المصنع',type:'factory',init:0,note:'استبدال التالف',code:''});
+  const w=d.entities.find(e=>e.id===WH); if(w.initDmg==null) w.initDmg=0;
+  return d;
+}
+
+/* ===================== الإقلاع ===================== */
+async function boot(){
+  // اطلب تخزينًا دائمًا حتى لا يحذف النظام البيانات عند ضيق المساحة
+  try{
+    if(navigator.storage?.persist){
+      const already=await navigator.storage.persisted?.();
+      if(!already) await navigator.storage.persist();
+    }
+  }catch(e){}
+
+  try{ idb=await openIDB(); }
+  catch(e){
+    lsFallback=true;
+    console.warn('IndexedDB غير متاح — العمل على localStorage',e);
+  }
+
+  if(!lsFallback){
+    db.entities=await idbAll('entities');
+    db.txs=await idbAll('txs');
+    db.audit=await idbAll('audit');
+    db.meta={}; (await idbAll('kv')).forEach(r=>db.meta[r.k]=r.v);
+
+    // ترقية لمرة واحدة من localStorage القديم
+    if(!db.entities.length && !db.txs.length){
+      const raw=localStorage.getItem(LS_KEY);
+      if(raw){
+        try{
+          const old=JSON.parse(raw);
+          if(Array.isArray(old.entities)&&Array.isArray(old.txs)){
+            const d=migrate(systemEntities({entities:old.entities,txs:old.txs,audit:old.audit||[],meta:old.meta||{}}));
+            const ops=[...d.entities.map(putEnt),...d.txs.map(putTx),...d.audit.map(putAud),
+                       putKV('schema',SCHEMA),putKV('seq',d.meta.seq||d.txs.length),
+                       putKV('lastBackup',d.meta.lastBackup||0),putKV('migratedFrom','localStorage')];
+            await idbWrite(ops);
+            db.entities=d.entities; db.txs=d.txs; db.audit=d.audit;
+            db.meta={schema:SCHEMA,seq:d.meta.seq||d.txs.length,lastBackup:d.meta.lastBackup||0};
+            setTimeout(()=>toast(`نُقلت بياناتك إلى تخزين أوسع: ${fmt(d.txs.length)} حركة.`),600);
+          }
+        }catch(e){ console.warn('فشلت الترقية من localStorage',e); }
+      }
+    }
+  }else{
+    try{
+      const raw=localStorage.getItem(LS_KEY);
+      if(raw){ const o=JSON.parse(raw); db.entities=o.entities||[]; db.txs=o.txs||[]; db.audit=o.audit||[]; db.meta=o.meta||{}; }
+    }catch(e){}
+  }
+
+  // ترقية مخطط البيانات المحمّلة إن لزم
+  const before=JSON.stringify({s:db.meta.schema});
+  systemEntities(db); migrate(db);
+  if(JSON.stringify({s:db.meta.schema})!==before || !db.entities.find(e=>e.id===FAC)){
+    await idbWrite([...db.entities.map(putEnt),...db.txs.map(putTx),putKV('schema',SCHEMA),putKV('seq',db.meta.seq||0)]).catch(()=>{});
+  }
+
+  invalidate(); renderAll();
+  if(lsFallback) toast('تنبيه: المتصفح لا يدعم التخزين الموسّع، فالسعة محدودة. خُذ نسخًا احتياطية أكثر.',true);
+}
+
+/* ===================== أنواع الحركات ===================== */
 const TX={
   outbound:{ar:'صرف من المخزن',icon:'↗',cls:'out',hint:'مخزن ← مزرعة أو مبيع'},
   sale:    {ar:'بيع سمك',icon:'⇢',cls:'out',hint:'مزرعة ← مبيع'},
   empty:   {ar:'تحويل فارغ',icon:'⇠',cls:'out',hint:'مبيع ← مزرعة'},
   f2f:     {ar:'تحويل بين المزارع',icon:'⇌',cls:'out',hint:'مزرعة ← مزرعة'},
-  inbound: {ar:'توريد راجع للمخزن',icon:'↙',cls:'in',hint:'مبيع ← المخزن'},
+  inbound: {ar:'توريد راجع للمخزن',icon:'↙',cls:'in',hint:'مزرعة أو مبيع ← المخزن'},
   settle:  {ar:'جرد وتسوية',icon:'⊜',cls:'warn',hint:'مزرعة أو مبيع ← المخزن'},
   dmg_out: {ar:'إرسال تالف للمصنع',icon:'⊗',cls:'bad',hint:'مخزن ← المصنع'},
   dmg_in:  {ar:'استلام بديل من المصنع',icon:'⊕',cls:'in',hint:'المصنع ← المخزن'},
   purchase:{ar:'شراء بكش جديد',icon:'✚',cls:'in',hint:'إضافة للمخزن'},
   dsettle: {ar:'تصفية حساب سائق',icon:'✓',cls:'warn',hint:'تصفير غرامة الإهمال'},
-  // أنواع قديمة تُعرض في السجل ولا تُنشأ من جديد
   count:   {ar:'جرد (صيغة قديمة)',icon:'⊜',cls:'warn',hint:''},
   loss:    {ar:'تسوية فاقد (صيغة قديمة)',icon:'✖',cls:'bad',hint:''}
 };
 const REASONS={negligence:'إهمال سائق', natural:'إهلاك طبيعي', farm_wear:'إهلاك بالمزرعة'};
+const TYPE_AR={farm:'مزرعة',sales:'مبيع',driver:'سائق',warehouse:'مخزن',factory:'مصنع'};
+const blank={good:0,damaged:0,lost:0,remain:null,from:null,to:null,driver:null,reason:null,
+             note:'',counted:null,cleared:0,status:'active',voidedAt:null,voidReason:'',replaces:null};
 
-/* ============ حسابات الدفتر ============ */
-const vol=t=>n(t.good)+n(t.damaged);   // ما ينتقل فعليًا من جهة إلى أخرى
-const outQ=t=>vol(t)+n(t.lost);        // ما يخرج من الجهة المرسلة: المنتقل + الفاقد (الفاقد يخرج من النظام كله)
-const rows=(skip)=>skip?db.txs.filter(t=>t.id!==skip):db.txs;
+const ent=id=>db.entities.find(e=>e.id===id);
+const nameOf=id=>id?(ent(id)?.name||'—'):'—';
+const byType=(...t)=>db.entities.filter(e=>t.includes(e.type)).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+const live=t=>t.status!=='void';
 
-function whBalance(skip,filter){
-  // المخزن يبدأ برصيدين افتتاحيين منفصلين: سليم وتالف
-  // filter اختياري: لحساب رصيد المخزن حتى تاريخ معيّن (أول اليوم / آخره)
-  let good=n(ent(WH)?.init), dmg=n(ent(WH)?.initDmg);
-  for(const t of rows(skip)){
-    if(filter&&!filter(t)) continue;
-    if(t.type==='outbound')      good-=n(t.good);
-    else if(t.type==='inbound'||t.type==='settle'){ good+=n(t.good); dmg+=n(t.damaged); }
-    else if(t.type==='purchase') good+=n(t.good);
-    else if(t.type==='dmg_in')   good+=n(t.good);
-    else if(t.type==='dmg_out')  dmg -=n(t.damaged);
+/* ===================== الدفتر ===================== */
+const vol=t=>num(t.good)+num(t.damaged);       // ما ينتقل فعليًا
+const outQ=t=>vol(t)+num(t.lost);              // ما يخرج من الجهة المرسلة
+
+let _led=null;
+const invalidate=()=>{ _led=null; };
+
+/* مرور واحد يبني كل الأرصدة وإحصاءات السائقين */
+function ledger(){
+  if(_led) return _led;
+  const bal={}, drv={};
+  for(const e of db.entities){
+    if(e.id!==WH) bal[e.id]=num(e.init);
+    if(e.type==='driver') drv[e.id]={negl:0,nat:0,cleared:0,trips:0};
+  }
+  let wg=num(ent(WH)?.init), wd=num(ent(WH)?.initDmg);
+  for(const t of db.txs){
+    if(!live(t)) continue;
+    if(t.to && t.to!==WH)   bal[t.to]=(bal[t.to]||0)+vol(t);
+    if(t.from && t.from!==WH) bal[t.from]=(bal[t.from]||0)-outQ(t);
+    if(t.type==='outbound')      wg-=num(t.good);
+    else if(t.type==='inbound'||t.type==='settle'){ wg+=num(t.good); wd+=num(t.damaged); }
+    else if(t.type==='purchase'||t.type==='dmg_in') wg+=num(t.good);
+    else if(t.type==='dmg_out')  wd-=num(t.damaged);
+    const d=t.driver&&drv[t.driver];
+    if(d){
+      if(t.type!=='dsettle') d.trips++;
+      // تالف المزرعة لا يُحتسب على السائق — المبايع فقط
+      if((t.type==='inbound'||t.type==='settle') && ent(t.from)?.type==='sales'){
+        if(t.reason==='negligence') d.negl+=num(t.damaged);
+        if(t.reason==='natural')    d.nat +=num(t.damaged);
+      }
+      if(t.type==='dsettle') d.cleared+=num(t.cleared);
+    }
+  }
+  bal[WH]=wg+wd;
+  _led={bal,wg,wd,drv};
+  return _led;
+}
+/* مرشّح الحركات السارية في لحظة/يوم معيّن — يجيب «كم كان الرصيد يومها» */
+function txFilter(o){
+  o=o||{};
+  return t=>{
+    if(o.skip && t.id===o.skip) return false;
+    if(o.asOf){                                  // كما كان الدفتر آخر ذلك اليوم
+      if(dateKey(t.ts)>o.asOf) return false;
+      if(t.voidedAt && dateKey(t.voidedAt)<=o.asOf) return false;
+      return true;
+    }
+    if(o.before){                                // كما كان أول ذلك اليوم
+      if(dateKey(t.ts)>=o.before) return false;
+      if(t.voidedAt && dateKey(t.voidedAt)<o.before) return false;
+      return true;
+    }
+    return live(t);
+  };
+}
+function whBalance(o){
+  if(!o||(!o.skip&&!o.asOf&&!o.before)){ const L=ledger(); return {good:L.wg,dmg:L.wd,total:L.wg+L.wd}; }
+  const keep=txFilter(o);
+  let good=num(ent(WH)?.init), dmg=num(ent(WH)?.initDmg);
+  for(const t of db.txs){
+    if(!keep(t)) continue;
+    if(t.type==='outbound')      good-=num(t.good);
+    else if(t.type==='inbound'||t.type==='settle'){ good+=num(t.good); dmg+=num(t.damaged); }
+    else if(t.type==='purchase'||t.type==='dmg_in') good+=num(t.good);
+    else if(t.type==='dmg_out')  dmg -=num(t.damaged);
   }
   return {good,dmg,total:good+dmg};
 }
-function balanceOf(id,skip){
-  if(id===WH) return whBalance(skip).total;
-  let b=n(ent(id)?.init);
-  for(const t of rows(skip)){
+function balanceOf(id,o){
+  if(!o||(!o.skip&&!o.asOf&&!o.before)){
+    if(id===WH) return ledger().bal[WH];
+    const v=ledger().bal[id];
+    return v===undefined?num(ent(id)?.init):v;
+  }
+  if(id===WH) return whBalance(o).total;
+  const keep=txFilter(o);
+  let b=num(ent(id)?.init);
+  for(const t of db.txs){
+    if(!keep(t)) continue;
     if(t.to===id)   b+=vol(t);
     if(t.from===id) b-=outQ(t);
   }
@@ -622,37 +853,43 @@ function totals(){
   return {w,farms,sales,fac,assets:w.total+farms+sales+fac};
 }
 function driverStats(id){
-  let negl=0,nat=0,cleared=0,trips=0;
-  for(const t of db.txs){
-    if(t.driver===id && t.type!=='dsettle') trips++;
-    // التالف الراجع من المزرعة لا يُحتسب على السائق — المبايع فقط
-    if((t.type==='inbound'||t.type==='settle') && t.driver===id && ent(t.from)?.type==='sales'){
-      if(t.reason==='negligence') negl+=n(t.damaged);
-      if(t.reason==='natural')    nat +=n(t.damaged);
-    }
-    if(t.type==='dsettle' && t.driver===id) cleared+=n(t.cleared);
-  }
-  return {negl,nat,cleared,open:negl-cleared,trips};
+  const d=ledger().drv[id]||{negl:0,nat:0,cleared:0,trips:0};
+  return {...d,open:d.negl-d.cleared};
 }
-const blank={good:0,damaged:0,lost:0,remain:null,from:null,to:null,driver:null,reason:null,note:'',counted:null,cleared:0};
-function addTx(o){
-  db.txs.push(Object.assign({id:uid(),ts:Date.now()},blank,o));
-  save(); renderAll();
+
+/* بناء سجل حركة جديد */
+function newTx(o){
+  return Object.assign({id:uid(),seq:nextSeq(),createdAt:Date.now(),ts:Date.now()},blank,o);
 }
-function logAudit(action,before,after,reason){
-  db.audit.push({id:uid(),ts:Date.now(),action,txId:before.id,txType:before.type,
-                 before:JSON.parse(JSON.stringify(before)), after:after?JSON.parse(JSON.stringify(after)):null, reason:reason||''});
+async function addTx(o){
+  const t=newTx(o);
+  return commit([putTx(t),putKV('seq',t.seq)]);
+}
+function auditRec(action,before,after,reason){
+  return {id:uid(),ts:Date.now(),action,txId:before.id,txType:before.type,
+          before:JSON.parse(JSON.stringify(before)),
+          after:after?JSON.parse(JSON.stringify(after)):null,reason:reason||''};
 }
 function txSummary(t){
   if(!t) return '—';
   const m=TX[t.type]||{ar:t.type};
   if(t.type==='dsettle') return `${m.ar} · ${nameOf(t.driver)} · ${fmt(t.cleared)}`;
-  if(t.type==='count')   return `${m.ar} · ${nameOf(t.from||t.to)} · معدود ${fmt(t.counted)}`;
-  const g=n(t.good), d=n(t.damaged), l=n(t.lost);
+  const g=num(t.good), d=num(t.damaged), l=num(t.lost);
   return `${m.ar} · ${nameOf(t.from)}←${nameOf(t.to)} · سليم ${fmt(g)}${d?` تالف ${fmt(d)}`:''}${l?` فاقد ${fmt(l)}`:''} · ${fmtDT(t.ts)}`;
 }
+/* أُدخلت بعد وقوعها بأكثر من يوم — علامة تدقيق مفيدة */
+const lateEntry=t=>int(t.createdAt)-int(t.ts)>86400000;
 
-/* نافذة سبب التعديل أو الإلغاء — أزرار جاهزة أسرع من الكتابة على الهاتف */
+/* ===================== التنقل ===================== */
+function go(view){
+  $$('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
+  if(view==='reports') renderReport();
+  $$('nav button').forEach(b=>b.dataset.go===view?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
+  window.scrollTo({top:0});
+}
+$$('nav button').forEach(b=>b.onclick=()=>go(b.dataset.go));
+
+/* ===================== نافذة سبب التغيير ===================== */
 const WHY_EDIT=['تصحيح كمية','تصحيح الجهة','تصحيح التاريخ','خطأ إدخال'];
 const WHY_VOID=['خطأ إدخال','حركة مكررة','لم تحدث فعلًا','سُجّلت لجهة خطأ'];
 let whyCB=null;
@@ -667,7 +904,6 @@ function askWhy(title,sub,options,cb){
     $('#whyText').value=b.dataset.why;
   });
   $('#whyModal').classList.add('open');
-  setTimeout(()=>$('#whyText').focus(),60);
 }
 $('#whyCancel').onclick=()=>{ $('#whyModal').classList.remove('open'); whyCB=null; };
 $('#whyOk').onclick=()=>{
@@ -677,19 +913,103 @@ $('#whyOk').onclick=()=>{
   const cb=whyCB; whyCB=null; cb&&cb(v);
 };
 
-/* ============ التنقل ============ */
-function go(view){
-  $$('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
-  $$('nav button').forEach(b=>b.dataset.go===view?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
-  window.scrollTo({top:0});
+/* ===================== منتقي الجهات بالبحث ===================== */
+function recentEnts(types,limit){
+  const seen=[];
+  for(const t of [...db.txs].sort((a,b)=>b.ts-a.ts)){
+    for(const id of [t.from,t.to]){
+      if(!id||seen.includes(id)) continue;
+      const e=ent(id); if(e&&types.includes(e.type)) seen.push(id);
+    }
+    if(seen.length>=(limit||6)) break;
+  }
+  return seen.slice(0,limit||6);
 }
-$$('nav button').forEach(b=>b.onclick=()=>go(b.dataset.go));
+let pk={types:[],cur:'',filter:'',onPick:null};
+function openPicker(o){
+  pk={types:o.types,cur:o.current||'',filter:o.types[0],onPick:o.onPick};
+  $('#pkTitle').textContent=o.title||'اختر الجهة';
+  $('#pkQ').value='';
+  $('#picker').classList.add('open');
+  renderPicker();
+  setTimeout(()=>$('#pkQ').focus(),80);
+}
+const closePicker=()=>$('#picker').classList.remove('open');
+function renderPicker(){
+  const multi=pk.types.length>1;
+  $('#pkChips').innerHTML = multi ? pk.types.map(t=>
+    `<button type="button" data-pkt="${t}" aria-selected="${t===pk.filter}">${t==='farm'?'المزارع':t==='sales'?'المبايع':'السائقون'}</button>`).join('') : '';
+  $$('[data-pkt]').forEach(b=>b.onclick=()=>{pk.filter=b.dataset.pkt;renderPicker()});
+  const q=norm($('#pkQ').value);
+  const pool=byType(pk.filter);
+  const hits=pool.filter(e=>!q||norm(e.name).includes(q)||(e.code&&norm(e.code).includes(q)));
+  const row=e=>{
+    const isD=e.type==='driver';
+    const b=isD?driverStats(e.id).open:balanceOf(e.id);
+    const lbl=isD?(b>0?`غرامة قائمة ${fmt(b)}`:'نظيف'):`عهدة ${fmt(b)}`;
+    return `<button type="button" class="pkrow" data-pk="${e.id}" aria-selected="${e.id===pk.cur}">
+      <div><div class="nm">${esc(e.name)}${e.code?`<span class="code">${esc(e.code)}</span>`:''}</div>
+        <div class="mt">${lbl}${e.note?' · '+esc(e.note):''}</div></div>
+      <div class="bl" style="color:${!isD&&b<0?'var(--rust)':'var(--hull)'}">${isD?'':fmt(b)}</div></button>`;
+  };
+  let html='';
+  if(!q){
+    const rec=recentEnts([pk.filter],6).map(id=>ent(id)).filter(Boolean);
+    if(rec.length) html+=`<div class="sh-sec">الأكثر استخدامًا حديثًا</div>`+rec.map(row).join('');
+  }
+  const CAP=80, shown=hits.slice(0,CAP);
+  html+=`<div class="sh-sec">${q?`نتائج البحث — ${fmt(hits.length)}`:`الكل — ${fmt(pool.length)}`}</div>`;
+  html+= shown.length ? shown.map(row).join('')
+    : `<div class="empty"><strong>لا نتائج</strong>${q?'جرّب حروفًا أقل، أو ابحث بالكود.':'أضف الجهة من تبويب البيانات.'}</div>`;
+  if(hits.length>CAP) html+=`<div class="empty" style="padding:16px"><strong>+${fmt(hits.length-CAP)} أخرى</strong>اكتب حروفًا أكثر لتضييق النتائج.</div>`;
+  $('#pkBody').innerHTML=html;
+  $$('[data-pk]').forEach(b=>b.onclick=()=>{ const id=b.dataset.pk; closePicker(); pk.onPick&&pk.onPick(id); });
+}
+$('#pkQ').addEventListener('input',renderPicker);
+$('#pkClose').onclick=closePicker;
 
-/* ============ الرئيسية ============ */
-/* دليل الإعداد يختفي تلقائيًا عند اكتمال خطواته */
+function pickF(base,label,curId,types,ph){
+  const e=curId?ent(curId):null;
+  return `<label>${label}</label>
+    <input type="hidden" id="${base}" value="${curId||''}">
+    <button type="button" class="pickfield" id="${base}-btn" data-types="${types.join(',')}"
+            data-label="${esc(label)}" data-ph="${esc(ph||'اختر الجهة')}">
+      <span class="pf-n ${e?'':'ph'}">${e?esc(e.name):esc(ph||'اختر الجهة')}</span>
+      <span class="pf-b">${e&&e.type!=='driver'?fmt(balanceOf(curId)):''}</span>
+      <span class="pf-i">بحث ›</span></button>`;
+}
+function bindPickers(){
+  $$('.pickfield').forEach(btn=>{
+    const base=btn.id.replace(/-btn$/,''), hid=$('#'+base);
+    btn.onclick=()=>openPicker({
+      types:btn.dataset.types.split(','), current:hid.value, title:btn.dataset.label,
+      onPick:id=>{
+        const e=ent(id);
+        hid.value=id;
+        btn.querySelector('.pf-n').textContent=e.name;
+        btn.querySelector('.pf-n').classList.remove('ph');
+        btn.querySelector('.pf-b').textContent=e.type!=='driver'?fmt(balanceOf(id)):'';
+        hid.dispatchEvent(new Event('change')); hid.dispatchEvent(new Event('input'));
+      }});
+  });
+}
+function driverSel(req,sel){
+  const d=byType('driver');
+  if(!d.length) return `<label>السائق</label><div class="hint" style="margin-top:0">أضف سائقًا من تبويب البيانات أولًا.</div>
+    <input type="hidden" id="f-driver" value="">`;
+  if(d.length<=12){
+    return `<label>السائق${req?'':' (اختياري)'}</label>
+      <div class="chips" id="drvChips">${d.map(e=>
+        `<button type="button" data-drv="${e.id}" aria-selected="${e.id===sel}">${esc(e.name)}</button>`).join('')}</div>
+      <input type="hidden" id="f-driver" value="${sel||''}">`;
+  }
+  return pickF('f-driver','السائق'+(req?'':' (اختياري)'),sel,['driver'],'اختر السائق');
+}
+
+/* ===================== الرئيسية ===================== */
 function renderSetup(){
   const steps=[
-    {ok:n(ent(WH).init)>0||n(ent(WH).initDmg)>0, t:'اضبط اسم المخزن ورصيده الافتتاحي', go:'data'},
+    {ok:num(ent(WH).init)>0||num(ent(WH).initDmg)>0, t:'اضبط اسم المخزن ورصيده الافتتاحي', go:'data'},
     {ok:byType('farm').length>0,  t:'أضف المزارع', go:'data'},
     {ok:byType('sales').length>0, t:'أضف المبايع', go:'data'},
     {ok:byType('driver').length>0,t:'أضف السائقين', go:'data'},
@@ -702,11 +1022,10 @@ function renderSetup(){
        ${x.ok?'':`<button class="btn ghost sm go" data-goto="${x.go}">ابدأ</button>`}</div>`).join('')+`</div>`;
   $$('[data-goto]').forEach(b=>b.onclick=()=>go(b.dataset.goto));
 }
-/* تنبيه النسخة الاحتياطية: أهم خطر هنا ضياع الهاتف لا خطأ الحساب */
 function renderBackupWarn(){
-  const box=$('#backupWarn'), last=db.meta?.lastBackup||0;
+  const box=$('#backupWarn'), last=int(db.meta.lastBackup);
   const days=last?Math.floor((Date.now()-last)/86400000):null;
-  const since=db.txs.filter(t=>t.ts>last).length;
+  const since=db.txs.filter(t=>t.createdAt>last).length;
   if(db.txs.length===0||(last&&days<7&&since<50)){ box.innerHTML=''; return; }
   box.innerHTML=`<div class="strip warn">
     <div><b>خُذ نسخة احتياطية</b>${last?`آخر نسخة قبل ${days} يوم · ${fmt(since)} حركة بعدها`:'لم تأخذ أي نسخة حتى الآن. ضياع الهاتف يعني ضياع السجل كله.'}</div>
@@ -743,12 +1062,40 @@ function renderHome(){
   $('#recentList').innerHTML = recent.length ? recent.map(t=>txRow(t,true)).join('')
     : `<div class="empty"><strong>الدفتر فارغ</strong>ابدأ من تبويب العمليات لتسجيل أول حركة.</div>`;
   bindRowActions();
-
   $('#hdrDate').textContent=fmtLong(Date.now());
-  $('#hdrCount').textContent=`${db.txs.length} حركة`;
+  $('#hdrCount').textContent=`${fmt(db.txs.filter(live).length)} حركة`;
 }
 
-/* تفاصيل عهدة المزارع أو المبايع، والضغط على أي جهة يفتح كشف حسابها */
+function txRow(t,acts){
+  const m=TX[t.type]||{ar:t.type,icon:'•',cls:''};
+  const dead=!live(t);
+  let l2;
+  if(t.type==='purchase')     l2=`إلى ${esc(nameOf(WH))}${t.note?' · '+esc(t.note):''}`;
+  else if(t.type==='dsettle') l2=`السائق ${esc(nameOf(t.driver))} · تصفية ${fmt(t.cleared)} بكش`;
+  else if(t.type==='settle')  l2=`${esc(nameOf(t.from))} ← ${esc(nameOf(WH))} · سليم ${fmt(t.good)} · تالف ${fmt(t.damaged)} · متبقٍ ${fmt(t.remain)}`+
+      (num(t.lost)>0?` · <b style="color:var(--rust)">فاقد ${fmt(t.lost)}</b>`:num(t.lost)<0?` · زيادة ${fmt(-t.lost)}`:'');
+  else if(t.type==='loss')    l2=`خصم من ${esc(nameOf(t.from))}${t.note?' · '+esc(t.note):''}`;
+  else if(t.type==='count')   l2=`${esc(nameOf(t.from||t.to))} · المعدود ${fmt(t.counted)}`;
+  else l2=`${esc(nameOf(t.from))} ← ${esc(nameOf(t.to))}${t.driver?' · السائق '+esc(nameOf(t.driver)):''}`;
+  const q=t.type==='dsettle'?num(t.cleared):vol(t);
+  return `<div class="tx ${dead?'dead':m.cls}">
+    <div class="badge" aria-hidden="true">${dead?'⊘':m.icon}</div>
+    <div class="body">
+      <div class="t1">${m.ar}${dead?' <span class="pill d">مُلغاة</span>':''}${t.replaces?' <span class="pill">تصحيح</span>':''}${lateEntry(t)?' <span class="pill a">أُدخلت متأخرًا</span>':''}</div>
+      <div class="t2">${l2} · <span class="num">${fmtDT(t.ts)}</span>${dead&&t.voidReason?` · سبب الإلغاء: ${esc(t.voidReason)}`:''}</div>
+    </div>
+    <div class="qty"><span class="num">${fmt(q)}</span>${num(t.damaged)&&t.type!=='dmg_out'?`<small>تالف ${fmt(t.damaged)} · ${REASONS[t.reason]||''}</small>`:''}</div>
+    ${acts&&!dead?`<div class="acts no-print">
+       <button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
+       <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button></div>`:''}
+  </div>`;
+}
+function bindRowActions(){
+  $$('[data-edittx]').forEach(b=>b.onclick=()=>startEdit(b.dataset.edittx));
+  $$('[data-deltx]').forEach(b=>b.onclick=()=>voidTx(b.dataset.deltx));
+}
+
+/* نافذة تفاصيل العهدة */
 function openDrill(kind){
   const all=byType(kind).map(e=>({e,b:balanceOf(e.id)}));
   const active=all.filter(x=>x.b!==0).sort((a,b)=>Math.abs(b.b)-Math.abs(a.b));
@@ -760,17 +1107,14 @@ function openDrill(kind){
     `<div class="dsum">
        <span>${kind==='farm'?'مزارع':'مبايع'} بعهدة قائمة<b>${fmt(active.length)}</b></span>
        <span>مسجّلة<b>${fmt(all.length)}</b></span>
-       <span>إجمالي العهدة<b>${fmt(total)}</b></span>
-     </div>
+       <span>إجمالي العهدة<b>${fmt(total)}</b></span></div>
      <div style="padding:11px 14px;border-bottom:1px solid var(--line)">
-       <button type="button" class="btn ghost" id="drillSearch" style="width:100%">بحث في كل ${word} بالاسم أو الكود</button>
-     </div>`
+       <button type="button" class="btn ghost" id="drillSearch" style="width:100%">بحث في كل ${word} بالاسم أو الكود</button></div>`
     + (shown.length ? `<div class="sh-sec">أصحاب العهدة القائمة</div>` + shown.map(({e,b})=>
         `<button type="button" class="pkrow" data-stmt="${e.id}">
            <div><div class="nm">${esc(e.name)}${e.code?`<span class="code">${esc(e.code)}</span>`:''}</div>
              <div class="mt">اضغط لكشف الحساب</div></div>
-           <div class="bl" style="color:${b<0?'var(--rust)':'var(--hull)'}">${fmt(b)}</div>
-         </button>`).join('')
+           <div class="bl" style="color:${b<0?'var(--rust)':'var(--hull)'}">${fmt(b)}</div></button>`).join('')
       : `<div class="empty"><strong>لا عهدة قائمة</strong>كل ${one} برصيد صفر حاليًا.</div>`)
     + (active.length>CAP?`<div class="empty" style="padding:14px"><strong>+${fmt(active.length-CAP)} أخرى</strong>استخدم زر البحث أعلاه.</div>`:'');
   $$('[data-stmt]').forEach(b=>b.onclick=()=>openStmt(b.dataset.stmt));
@@ -793,43 +1137,7 @@ $$('[data-open]').forEach(b=>b.onclick=()=>{
 $('#drillClose').onclick=()=>$('#drill').classList.remove('open');
 $('#drill').addEventListener('click',e=>{if(e.target.id==='drill')$('#drill').classList.remove('open')});
 
-function txRow(t,acts){
-  const m=TX[t.type]||{ar:t.type,icon:'•',cls:''};
-  let l2;
-  if(t.type==='purchase')     l2=`إلى ${esc(nameOf(WH))}${t.note?' · '+esc(t.note):''}`;
-  else if(t.type==='loss')    l2=`خصم من ${esc(nameOf(t.from))}${t.note?' · '+esc(t.note):''}`;
-  else if(t.type==='dsettle') l2=`السائق ${esc(nameOf(t.driver))} · تصفية ${fmt(t.cleared)} بكش`;
-  else if(t.type==='settle'){
-    l2=`${esc(nameOf(t.from))} ← ${esc(nameOf(WH))} · سليم ${fmt(t.good)} · تالف ${fmt(t.damaged)} · متبقٍ ${fmt(t.remain)}`+
-       (n(t.lost)>0?` · <b style="color:var(--rust)">فاقد ${fmt(t.lost)}</b>`:n(t.lost)<0?` · زيادة ${fmt(-t.lost)}`:'');
-  }
-  else if(t.type==='count'){
-    const diff=(t.to?vol(t):-vol(t));
-    l2=`${esc(nameOf(t.from||t.to))} · المعدود ${fmt(t.counted)} · الفرق ${diff>0?'+':''}${fmt(diff)}`;
-  }
-  else l2=`${esc(nameOf(t.from))} ← ${esc(nameOf(t.to))}${t.driver?' · السائق '+esc(nameOf(t.driver)):''}`;
-  const q=t.type==='dsettle'?n(t.cleared):vol(t);
-  return `<div class="tx ${m.cls}">
-    <div class="badge" aria-hidden="true">${m.icon}</div>
-    <div class="body">
-      <div class="t1">${m.ar}</div>
-      <div class="t2">${l2} · <span class="num">${fmtDT(t.ts)}</span></div>
-    </div>
-    <div class="qty"><span class="num">${fmt(q)}</span>${n(t.damaged)&&t.type!=='dmg_out'?`<small>تالف ${fmt(t.damaged)} · ${REASONS[t.reason]||''}</small>`:''}</div>
-    ${acts?`<div class="acts no-print">
-       <button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
-       <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button>
-     </div>`:''}
-  </div>`;
-}
-function bindRowActions(){
-  $$('[data-edittx]').forEach(b=>b.onclick=()=>startEdit(b.dataset.edittx));
-  $$('[data-deltx]').forEach(b=>b.onclick=()=>voidTx(b.dataset.deltx));
-}
-
-/* ============ العمليات ============ */
-/* العمليات مجمّعة في أربعة تبويبات رئيسية، يتفرع من كل واحد تبويب فرعي.
-   التجميع بحسب أثر الحركة على المخزن: صادر منه، وارد إليه، حركة لا تمر به، أو تسوية. */
+/* ===================== العمليات ===================== */
 const GROUPS=[
   {k:'out',  ar:'صادر',    icon:'↗', sub:['outbound','dmg_out']},
   {k:'in',   ar:'وارد',    icon:'↙', sub:['inbound','dmg_in','purchase']},
@@ -846,141 +1154,23 @@ function renderOpsPick(){
   $('#opGroups').innerHTML=GROUPS.map(x=>
     `<button type="button" role="tab" data-grp="${x.k}" aria-selected="${x.k===g.k}" ${editing?'disabled':''}>
        <i aria-hidden="true">${x.icon}</i>${x.ar}</button>`).join('');
-  $('#opSubs').hidden = g.sub.length<2;   // لا تبويب فرعي لمجموعة بعملية واحدة
+  $('#opSubs').hidden=g.sub.length<2;
   $('#opSubs').innerHTML=g.sub.map(k=>
     `<button type="button" role="tab" data-op="${k}" aria-selected="${k===curOp}" ${editing&&editing.type!==k?'disabled':''}>
        <i aria-hidden="true">${TX[k].icon}</i>${SHORT[k]}</button>`).join('');
-  $$('#opGroups button').forEach(b=>b.onclick=()=>{
-    if(editing) return;
-    curOp=GROUPS.find(x=>x.k===b.dataset.grp).sub[0];
-    renderOpsPick(); renderOpForm();
-  });
-  $$('#opSubs button').forEach(b=>b.onclick=()=>{
-    if(editing) return;
-    curOp=b.dataset.op; renderOpsPick(); renderOpForm();
-  });
-
+  $$('#opGroups button').forEach(b=>b.onclick=()=>{ if(editing) return;
+    curOp=GROUPS.find(x=>x.k===b.dataset.grp).sub[0]; renderOpsPick(); renderOpForm(); });
+  $$('#opSubs button').forEach(b=>b.onclick=()=>{ if(editing) return;
+    curOp=b.dataset.op; renderOpsPick(); renderOpForm(); });
   $('#editBar').innerHTML = editing
     ? `<div class="editbar"><b>وضع التعديل</b>
-        <span class="hint">تعدّل حركة مسجّلة يوم <span class="num">${fmtDT(editing.ts)}</span>. سيُحفظ التغيير في سجل التغييرات.</span>
+        <span class="hint">الحركة الأصلية ستُحفظ كملغاة ويُضاف سجل مصحّح، فيبقى التاريخ كاملًا.</span>
         <button class="btn ghost sm" id="btnCancelEdit">إلغاء التعديل</button></div>` : '';
   if(editing) $('#btnCancelEdit').onclick=()=>{editing=null;renderOpsPick();renderOpForm();toast('أُلغي وضع التعديل.');};
 }
 
 const V=(f,d)=>editing&&editing[f]!=null&&editing[f]!==''?editing[f]:d;
-function opts(list,ph,sel){
-  if(!list.length) return `<option value="">— لا يوجد سجل —</option>`;
-  return `<option value="">${ph}</option>`+list.map(e=>
-    `<option value="${e.id}" ${e.id===sel?'selected':''}>${esc(e.name)} (${fmt(balanceOf(e.id))})</option>`).join('');
-}
-/* ===== منتقي الجهات بالبحث — يتعامل مع مئات المزارع =====
-   تطبيع الحروف العربية حتى يجد "ابراهيم" عند كتابة "إبراهيم" والعكس. */
-const norm=v=>String(v||'')
-  .replace(/[\u064B-\u0652\u0670\u0640]/g,'')      // تشكيل وتطويل
-  .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي')
-  .replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي')
-  .replace(/\s+/g,' ').trim().toLowerCase();
-
-/* آخر الجهات المستخدمة فعليًا — تغطي معظم الحالات بلا كتابة */
-function recentEnts(types,limit){
-  const seen=[];
-  for(const t of [...db.txs].sort((a,b)=>b.ts-a.ts)){
-    for(const id of [t.from,t.to]){
-      if(!id||seen.includes(id)) continue;
-      const e=ent(id); if(e&&types.includes(e.type)) seen.push(id);
-    }
-    if(seen.length>=(limit||6)) break;
-  }
-  return seen.slice(0,limit||6);
-}
-
-let pk={types:[],cur:'',filter:'',onPick:null};
-function openPicker(o){
-  pk={types:o.types,cur:o.current||'',filter:o.types[0],onPick:o.onPick};
-  $('#pkTitle').textContent=o.title||'اختر الجهة';
-  $('#pkQ').value='';
-  $('#picker').classList.add('open');
-  renderPicker();
-  setTimeout(()=>$('#pkQ').focus(),80);
-}
-const closePicker=()=>$('#picker').classList.remove('open');
-function renderPicker(){
-  const multi=pk.types.length>1;
-  $('#pkChips').innerHTML = multi ? pk.types.map(t=>
-    `<button type="button" data-pkt="${t}" aria-selected="${t===pk.filter}">${t==='farm'?'المزارع':t==='sales'?'المبايع':'السائقون'}</button>`).join('') : '';
-  $$('[data-pkt]').forEach(b=>b.onclick=()=>{pk.filter=b.dataset.pkt;renderPicker()});
-
-  const q=norm($('#pkQ').value);
-  const pool=byType(pk.filter);
-  const match=e=>!q||norm(e.name).includes(q)||(e.code&&norm(e.code).includes(q));
-  const hits=pool.filter(match);
-  const row=(e,sel)=>{
-    const b=e.type==='driver'?driverStats(e.id).open:balanceOf(e.id);
-    const lbl=e.type==='driver'?(b>0?`غرامة قائمة ${fmt(b)}`:'نظيف'):`عهدة ${fmt(b)}`;
-    return `<button type="button" class="pkrow" data-pk="${e.id}" aria-selected="${e.id===pk.cur}">
-      <div><div class="nm">${esc(e.name)}${e.code?`<span class="code">${esc(e.code)}</span>`:''}</div>
-        <div class="mt">${lbl}${e.note?' · '+esc(e.note):''}</div></div>
-      <div class="bl" style="color:${e.type!=='driver'&&b<0?'var(--rust)':'var(--hull)'}">${e.type==='driver'?'':fmt(b)}</div>
-    </button>`;
-  };
-  let html='';
-  if(!q){
-    const rec=recentEnts([pk.filter],6).map(id=>ent(id)).filter(Boolean);
-    if(rec.length) html+=`<div class="sh-sec">الأكثر استخدامًا حديثًا</div>`+rec.map(e=>row(e)).join('');
-  }
-  const CAP=80, shown=hits.slice(0,CAP);
-  html+=`<div class="sh-sec">${q?`نتائج البحث — ${fmt(hits.length)}`:`الكل — ${fmt(pool.length)}`}</div>`;
-  html+= shown.length ? shown.map(e=>row(e)).join('')
-    : `<div class="empty"><strong>لا نتائج</strong>${q?'جرّب حروفًا أقل، أو تأكد من الكود.':'أضف الجهة من تبويب البيانات.'}</div>`;
-  if(hits.length>CAP) html+=`<div class="empty" style="padding:16px"><strong>+${fmt(hits.length-CAP)} أخرى</strong>اكتب حروفًا أكثر لتضييق النتائج.</div>`;
-  $('#pkBody').innerHTML=html;
-  $$('[data-pk]').forEach(b=>b.onclick=()=>{ const id=b.dataset.pk; closePicker(); pk.onPick&&pk.onPick(id); });
-}
-$('#pkQ').addEventListener('input',renderPicker);
-$('#pkClose').onclick=closePicker;
-
-/* حقل يعرض الجهة المختارة ويفتح شاشة البحث */
-function pickF(base,label,curId,types,ph){
-  const e=curId?ent(curId):null;
-  return `<label>${label}</label>
-    <input type="hidden" id="${base}" value="${curId||''}">
-    <button type="button" class="pickfield" id="${base}-btn" data-types="${types.join(',')}"
-            data-label="${esc(label)}" data-ph="${esc(ph||'اختر الجهة')}">
-      <span class="pf-n ${e?'':'ph'}">${e?esc(e.name):esc(ph||'اختر الجهة')}</span>
-      <span class="pf-b">${e&&e.type!=='driver'?fmt(balanceOf(curId)):''}</span>
-      <span class="pf-i">بحث ›</span>
-    </button>`;
-}
-function bindPickers(){
-  $$('.pickfield').forEach(btn=>{
-    const base=btn.id.replace(/-btn$/,''), hid=$('#'+base);
-    btn.onclick=()=>openPicker({
-      types:btn.dataset.types.split(','), current:hid.value, title:btn.dataset.label,
-      onPick:id=>{
-        const e=ent(id);
-        hid.value=id;
-        btn.querySelector('.pf-n').textContent=e.name;
-        btn.querySelector('.pf-n').classList.remove('ph');
-        btn.querySelector('.pf-b').textContent=e.type!=='driver'?fmt(balanceOf(id)):'';
-        hid.dispatchEvent(new Event('change')); hid.dispatchEvent(new Event('input'));
-      }});
-  });
-}
-function driverSel(req,sel){
-  const d=byType('driver');
-  if(!d.length) return `<label>السائق</label><div class="hint" style="margin-top:0">أضف سائقًا من تبويب البيانات أولًا.</div>
-    <input type="hidden" id="f-driver" value="">`;
-  // عدد قليل من السائقين: أزرار بلمسة واحدة. عدد كبير: بحث.
-  if(d.length<=12){
-    return `<label>السائق${req?'':' (اختياري)'}</label>
-      <div class="chips" id="drvChips">${d.map(e=>
-        `<button type="button" data-drv="${e.id}" aria-selected="${e.id===sel}">${esc(e.name)}</button>`).join('')}</div>
-      <input type="hidden" id="f-driver" value="${sel||''}">`;
-  }
-  return pickF('f-driver','السائق'+(req?'':' (اختياري)'),sel,['driver'],'اختر السائق');
-}
-const qtyF=(id,lbl,val)=>`<label for="${id}">${lbl}</label><input id="${id}" type="number" min="0" step="1" value="${val??''}" inputmode="numeric">`;
-/* الوقت مطوي: سطر يوضّح الوقت الحالي، ويتوسّع عند الحاجة فقط */
+const qtyF=(id,lbl,val)=>`<label for="${id}">${lbl}</label><input id="${id}" type="number" min="0" step="1" max="${MAXQ}" value="${val??''}" inputmode="numeric">`;
 const whenF=()=>{
   const ts=editing?editing.ts:Date.now(), op=!!editing;
   return `<div class="hint" id="whenLine" style="margin-top:14px;display:${op?'none':'flex'};gap:8px;align-items:center;flex-wrap:wrap">
@@ -989,10 +1179,8 @@ const whenF=()=>{
     <div id="whenBox" style="display:${op?'block':'none'}">
       <label for="f-when">وقت الحركة</label>
       <input id="f-when" type="datetime-local" value="${toInput(ts)}">
-      <div class="hint">اضبطه على وقت الحركة الفعلي إن كنت تسجّلها لاحقًا.</div>
-    </div>`;
+      <div class="hint">اضبطه على وقت الحركة الفعلي إن كنت تسجّلها لاحقًا.</div></div>`;
 };
-/* سبب التلف يظهر للمبايع فقط، لأن التالف الراجع من المزرعة لا يُحتسب على السائق */
 const reasonF=()=>`<div id="reasonWrap" hidden><label for="f-reason">سبب التلف</label>
     <select id="f-reason">
       <option value="negligence" ${V('reason')==='negligence'?'selected':''}>إهمال سائق</option>
@@ -1002,17 +1190,16 @@ const reasonF=()=>`<div id="reasonWrap" hidden><label for="f-reason">سبب ال
   <div class="hint" id="farmDmgNote" hidden>التالف الراجع من المزرعة يُسجَّل «إهلاك بالمزرعة» ولا يُحتسب على السائق.</div>`;
 function syncReason(){
   const rw=$('#reasonWrap'); if(!rw) return;
-  const isSales=ent($('#f-from')?.value)?.type==='sales', hasDmg=n($('#f-damaged')?.value)>0;
+  const isSales=ent($('#f-from')?.value)?.type==='sales', hasDmg=num($('#f-damaged')?.value)>0;
   rw.hidden=!(hasDmg&&isSales);
   $('#farmDmgNote').hidden=!(hasDmg&&!isSales);
 }
 const reasonVal=from=>ent(from)?.type==='sales' ? ($('#f-reason')?.value||'natural') : 'farm_wear';
 
 function renderOpForm(){
-  const f=$('#opForm'), w=whBalance(editing?.id);
+  const f=$('#opForm'), w=whBalance(editing?{skip:editing.id}:null);
   $('#opTitle').textContent=(editing?'تعديل: ':'')+TX[curOp].ar+' — '+TX[curOp].hint;
   let h='';
-
   if(curOp==='outbound'){
     h=`<div class="hint">المتاح للصرف الآن: <b class="num">${fmt(w.good)}</b> بكش سليم.</div>
       ${pickF('f-to','الجهة المستلمة',V('to'),['farm','sales'],'اختر مزرعة أو مبيع')}
@@ -1028,24 +1215,23 @@ function renderOpForm(){
       ${pickF('f-to','المزرعة',V('to'),['farm'],'اختر المزرعة')}
       ${qtyF('f-good','عدد البكش الفارغ',V('good'))}${driverSel(true,V('driver'))}`;
   }
-  else if(curOp==='inbound'){
-    h=`${pickF('f-from','الجهة المورِّدة',V('from'),['farm','sales'],'اختر مزرعة أو مبيع')}
-      <div class="row two"><div>${qtyF('f-good','<span class="lg g"></span>سليم',V('good'))}</div><div>${qtyF('f-damaged','<span class="lg d"></span>تالف',n(V('damaged',0)))}</div></div>
-      ${reasonF()}
-      ${driverSel(true,V('driver'))}`;
-  }
   else if(curOp==='f2f'){
     h=`${pickF('f-from','المزرعة المرسِلة',V('from'),['farm'],'اختر المزرعة')}
       ${pickF('f-to','المزرعة المستلمة',V('to'),['farm'],'اختر المزرعة')}
       ${qtyF('f-good','عدد البكش',V('good'))}${driverSel(true,V('driver'))}`;
   }
+  else if(curOp==='inbound'){
+    h=`${pickF('f-from','الجهة المورّدة',V('from'),['farm','sales'],'اختر مزرعة أو مبيع')}
+      <div class="row two"><div>${qtyF('f-good','<span class="lg g"></span>سليم',V('good'))}</div>
+      <div>${qtyF('f-damaged','<span class="lg d"></span>تالف',num(V('damaged',0)))}</div></div>
+      ${reasonF()}${driverSel(true,V('driver'))}`;
+  }
   else if(curOp==='settle'){
     h=`<div class="hint">أدخل الراجع للمخزن والمتبقي عند الجهة بعد العد، ويحسب التطبيق الفاقد وينبّهك به.</div>
       ${pickF('f-from','الجهة',V('from'),['farm','sales'],'اختر مزرعة أو مبيع')}
       <div class="row two">
-        <div>${qtyF('f-good','<span class="lg g"></span>راجع للمخزن — سليم',n(V('good',0)))}</div>
-        <div>${qtyF('f-damaged','<span class="lg d"></span>راجع للمخزن — تالف',n(V('damaged',0)))}</div>
-      </div>
+        <div>${qtyF('f-good','<span class="lg g"></span>راجع للمخزن — سليم',num(V('good',0)))}</div>
+        <div>${qtyF('f-damaged','<span class="lg d"></span>راجع للمخزن — تالف',num(V('damaged',0)))}</div></div>
       ${reasonF()}
       ${qtyF('f-remain','المتبقي عند الجهة بعد العد',V('remain'))}
       <div class="hint">اكتب 0 إذا صُفّيت العهدة بالكامل.</div>
@@ -1066,18 +1252,17 @@ function renderOpForm(){
   else if(curOp==='purchase'){
     h=`<div class="hint">الشراء يرفع إجمالي الأصول.</div>
       ${qtyF('f-good','عدد البكش المشترى',V('good'))}
-      <label for="f-note">المورِّد / رقم الفاتورة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}">`;
+      <label for="f-note">المورّد / رقم الفاتورة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}">`;
   }
   f.innerHTML=h+whenF()+`<button type="submit" class="btn block">${editing?'حفظ التعديل':'تسجيل '+TX[curOp].ar}</button>`;
 
   bindPickers();
   if($('#whenEdit')) $('#whenEdit').onclick=()=>{
-    $('#whenLine').style.display='none'; $('#whenBox').style.display='block'; $('#f-when').focus();
-  };
+    $('#whenLine').style.display='none'; $('#whenBox').style.display='block'; $('#f-when').focus(); };
   $$('[data-drv]').forEach(b=>b.onclick=()=>{
-    const h=$('#f-driver'), same=h.value===b.dataset.drv;
-    h.value=same?'':b.dataset.drv;
-    $$('[data-drv]').forEach(x=>x.setAttribute('aria-selected', x.dataset.drv===h.value));
+    const hid=$('#f-driver'), same=hid.value===b.dataset.drv;
+    hid.value=same?'':b.dataset.drv;
+    $$('[data-drv]').forEach(x=>x.setAttribute('aria-selected', x.dataset.drv===hid.value));
   });
   if(curOp==='inbound'||curOp==='settle'){
     $('#f-damaged').addEventListener('input',syncReason);
@@ -1090,15 +1275,14 @@ function renderOpForm(){
     $('#f-from').addEventListener('change',u); u();
   }
 }
-/* الفاقد = الرصيد الدفتري − (الراجع للمخزن) − (المتبقي عند الجهة).
-   موجب = عجز يُخصم من الأصول، سالب = زيادة تُضاف إليها. */
+/* الفاقد = الرصيد الدفتري − الراجع − المتبقي */
 function settleCalc(){
   const id=$('#f-from')?.value;
   if(!id) return null;
-  const bal=balanceOf(id,editing?.id);
-  const back=n($('#f-good').value)+n($('#f-damaged').value);
+  const bal=balanceOf(id,editing?{skip:editing.id}:null);
+  const back=num($('#f-good').value)+num($('#f-damaged').value);
   const rem=$('#f-remain').value;
-  return {id,bal,back,rem,lost: rem===''?null:bal-back-n(rem)};
+  return {id,bal,back,rem,lost: rem===''?null:bal-back-num(rem)};
 }
 function updateSettle(){
   const box=$('#settleInfo'), c=settleCalc();
@@ -1110,17 +1294,16 @@ function updateSettle(){
     box.innerHTML=head+`<span class="big">⚠ الفاقد ${fmt(c.lost)} بكش</span>سيُخصم نهائيًا من عهدة الجهة ومن إجمالي الأصول.`; }
   else if(c.lost<0){ box.classList.add('up');
     box.innerHTML=head+`<span class="big">زيادة جرد ${fmt(-c.lost)} بكش</span>ستُضاف إلى عهدة الجهة وإلى إجمالي الأصول.`; }
-  else { box.classList.add('ok');
-    box.innerHTML=head+`<span class="big">مطابق تمامًا</span>لا فاقد ولا زيادة.`; }
+  else { box.classList.add('ok'); box.innerHTML=head+`<span class="big">مطابق تمامًا</span>لا فاقد ولا زيادة.`; }
 }
 
-$('#opForm').addEventListener('submit',e=>{
+$('#opForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const g=id=>$(id)?$(id).value:'';
-  const good=n(g('#f-good')), dmg=n(g('#f-damaged'));
+  const good=num(g('#f-good')), dmg=num(g('#f-damaged'));
   const from=g('#f-from')||null, to=g('#f-to')||null, driver=g('#f-driver')||null;
-  const note=(g('#f-note')||'').trim(), ts=fromInput(g('#f-when'));
-  const w=whBalance(editing?.id);
+  const note=(g('#f-note')||'').trim(), ts=fromInput(g('#f-when')||toInput(Date.now()));
+  const w=whBalance(editing?{skip:editing.id}:null);
   const stop=m=>{toast(m,true);return null};
   let o=null;
 
@@ -1137,7 +1320,7 @@ $('#opForm').addEventListener('submit',e=>{
     o={type:curOp,from,to,good,driver,ts};
   }
   else if(curOp==='inbound'){
-    if(!from) return stop('اختر المبيع المورِّد.');
+    if(!from) return stop('اختر الجهة المورّدة.');
     if(good+dmg<=0) return stop('أدخل عدد السليم أو التالف.');
     o={type:'inbound',from,to:WH,good,damaged:dmg,driver,reason:dmg>0?reasonVal(from):null,ts};
   }
@@ -1147,9 +1330,9 @@ $('#opForm').addEventListener('submit',e=>{
     const c=settleCalc();
     if(c.back<=0 && c.lost===0) return stop('لا يوجد راجع ولا فرق. لا حاجة لتسجيل تسوية.');
     if(c.back>0 && !driver) return stop('اختر السائق الذي نقل الراجع للمخزن.');
-    if(c.lost>0 && !confirm(`الفاقد ${fmt(c.lost)} بكش.\n\nسيُخصم نهائيًا من عهدة «${nameOf(from)}» ومن إجمالي الأصول ولا يمكن التراجع إلا بإلغاء الحركة.\n\nتأكيد التسجيل؟`)) return;
+    if(c.lost>0 && !confirm(`الفاقد ${fmt(c.lost)} بكش.\n\nسيُخصم نهائيًا من عهدة «${nameOf(from)}» ومن إجمالي الأصول.\n\nتأكيد التسجيل؟`)) return;
     if(c.lost<0 && !confirm(`زيادة جرد ${fmt(-c.lost)} بكش ستُضاف لعهدة «${nameOf(from)}» وإلى إجمالي الأصول.\n\nتأكيد التسجيل؟`)) return;
-    o={type:'settle',from,to:WH,good,damaged:dmg,lost:c.lost,remain:n(g('#f-remain')),
+    o={type:'settle',from,to:WH,good,damaged:dmg,lost:c.lost,remain:num(g('#f-remain')),
        driver,reason:dmg>0?reasonVal(from):null,note,ts};
   }
   else if(curOp==='dmg_out'){
@@ -1168,26 +1351,29 @@ $('#opForm').addEventListener('submit',e=>{
   if(!o) return;
 
   if(editing){
-    const before=Object.assign({},editing);
-    const after=Object.assign({},blank,o,{id:editing.id});
-    askWhy('سبب التعديل',txSummary(before),WHY_EDIT,why=>{
-      const i=db.txs.findIndex(t=>t.id===before.id);
-      db.txs[i]=after;
-      logAudit('edit',before,after,why);
-      editing=null; save(); renderAll();
-      toast('حُفظ التعديل وسُجّل في سجل التغييرات.');
+    const before=editing;
+    askWhy('سبب التعديل',txSummary(before),WHY_EDIT,async why=>{
+      // append-only: القديم يُوسم ملغى، والجديد يشير إليه
+      const voided=Object.assign({},before,{status:'void',voidedAt:Date.now(),voidReason:'تعديل: '+why});
+      const fresh=newTx(Object.assign({},o,{replaces:before.id}));
+      const a=auditRec('edit',before,fresh,why);
+      editing=null;
+      if(await commit([putTx(voided),putTx(fresh),putAud(a),putKV('seq',fresh.seq)]))
+        toast('حُفظ التعديل. الحركة الأصلية محفوظة كملغاة في السجل.');
     });
   }else{
-    addTx(o);
-    toast(o.type==='settle'&&n(o.lost)>0
-      ? `سُجّلت التسوية. خُصم فاقد ${fmt(o.lost)} بكش من عهدة ${nameOf(o.from)}.`
-      : `تم تسجيل ${TX[curOp].ar}.`);
-    renderOpForm();
+    if(await addTx(o)){
+      toast(o.type==='settle'&&num(o.lost)>0
+        ? `سُجّلت التسوية. خُصم فاقد ${fmt(o.lost)} بكش من عهدة ${nameOf(o.from)}.`
+        : `تم تسجيل ${TX[curOp].ar}.`);
+      renderOpForm();
+    }
   }
 });
 
 function startEdit(id){
   const t=db.txs.find(x=>x.id===id); if(!t) return;
+  if(!live(t)) return toast('هذه الحركة ملغاة أصلًا.',true);
   if(t.type==='dsettle') return toast('تصفية حساب السائق لا تُعدَّل. ألغِها وسجّل تصفية جديدة.',true);
   if(t.type==='count'||t.type==='loss') return toast('هذه حركة بصيغة قديمة. ألغِها وسجّل «جرد وتسوية» بدلًا منها.',true);
   editing=t; curOp=t.type; go('ops'); renderOpsPick(); renderOpForm();
@@ -1195,29 +1381,26 @@ function startEdit(id){
   toast('عدّل البيانات ثم احفظ.');
 }
 function voidTx(id){
-  const t=db.txs.find(x=>x.id===id); if(!t) return;
-  askWhy('سبب إلغاء الحركة',txSummary(t),WHY_VOID,why=>{
-    const copy=Object.assign({},t);
-    logAudit('delete',t,null,why);
-    db.txs=db.txs.filter(x=>x.id!==id);
+  const t=db.txs.find(x=>x.id===id); if(!t||!live(t)) return;
+  askWhy('سبب إلغاء الحركة',txSummary(t),WHY_VOID,async why=>{
+    const voided=Object.assign({},t,{status:'void',voidedAt:Date.now(),voidReason:why});
+    const a=auditRec('void',t,null,why);
     if(editing&&editing.id===id) editing=null;
-    save(); renderAll();
-    toast('أُلغيت الحركة.',false,()=>{               // تراجع فوري خلال ثوانٍ
-      db.txs.push(copy);
-      db.audit=db.audit.filter(a=>!(a.action==='delete'&&a.txId===copy.id));
-      save(); renderAll(); toast('رجعت الحركة كما كانت.');
-    });
+    if(await commit([putTx(voided),putAud(a)]))
+      toast('أُلغيت الحركة. لم تُحذف، بل بقيت في السجل موسومة.',false,async()=>{
+        const back=Object.assign({},t,{status:'active',voidedAt:null,voidReason:''});
+        if(await commit([putTx(back),delAud(a.id)])) toast('رجعت الحركة كما كانت.');
+      });
   });
 }
 
-/* سجل العمليات: الوصول لأي حركة سابقة لتعديلها أو إلغائها من نفس التبويب */
+/* سجل العمليات داخل تبويب العمليات */
 let logCount=15;
 function renderOpLog(){
-  const q=($('#logQ').value||'').trim().toLowerCase();
+  const q=norm($('#logQ').value);
   const all=[...db.txs].sort((a,b)=>b.ts-a.ts).filter(t=>{
     if(!q) return true;
-    return [TX[t.type]?.ar,nameOf(t.from),nameOf(t.to),t.driver?nameOf(t.driver):'',t.note,REASONS[t.reason]||'']
-           .join(' ').toLowerCase().includes(q);
+    return norm([TX[t.type]?.ar,nameOf(t.from),nameOf(t.to),t.driver?nameOf(t.driver):'',t.note,REASONS[t.reason]||''].join(' ')).includes(q);
   });
   const shown=all.slice(0,logCount);
   $('#logList').innerHTML = shown.length ? shown.map(t=>txRow(t,true)).join('')
@@ -1234,15 +1417,13 @@ $('#btnLog').onclick=()=>{
 $('#logQ').addEventListener('input',()=>{ logCount=15; renderOpLog(); });
 $('#logMore').onclick=()=>{ logCount+=15; renderOpLog(); };
 
-/* ============ البيانات الأساسية ============ */
-const TYPE_AR={farm:'مزرعة',sales:'مبيع',driver:'سائق',warehouse:'مخزن',factory:'مصنع'};
+/* ===================== البيانات الأساسية ===================== */
 function renderData(){
   $('#whName').value=ent(WH).name;
-  $('#whInit').value=n(ent(WH).init);
-  $('#whInitDmg').value=n(ent(WH).initDmg);
-  $('#verLine').textContent=`الإصدار ${APP_VER} · ${db.txs.length} حركة · ${db.audit.length} تغيير مسجّل`;
+  $('#whInit').value=num(ent(WH).init);
+  $('#whInitDmg').value=num(ent(WH).initDmg);
+  $('#verLine').textContent=`الإصدار ${APP_VER} · ${fmt(db.txs.length)} سجل (${fmt(db.txs.filter(live).length)} ساري) · ${fmt(db.audit.length)} تغيير · التخزين: ${lsFallback?'محدود':'موسّع'}`;
 
-  // كل فئة في قائمة مستقلة مع بحث، وعرض محدود حتى لا تثقل الصفحة مع مئات الجهات
   const CAP=40;
   ['farm','sales','driver'].forEach(type=>{
     const isDrv=type==='driver', q=norm($('#q-'+type)?.value), all=byType(type);
@@ -1257,8 +1438,7 @@ function renderData(){
         <div class="body"><div class="t1">${esc(e.name)}${e.code?`<span class="code">${esc(e.code)}</span>`:''}</div>
           <div class="t2">${meta}${e.note?' · '+esc(e.note):''}</div></div>
         <div class="acts"><button class="btn ghost sm" data-edit="${e.id}">تعديل</button>
-          <button class="btn ghost sm" data-del="${e.id}" style="color:var(--rust)">حذف</button></div>
-      </div>`;
+          <button class="btn ghost sm" data-del="${e.id}" style="color:var(--rust)">حذف</button></div></div>`;
     };
     let html='';
     if(all.length>CAP) html+=`<div class="dsum" style="justify-content:center">${fmt(all.length)} ${TYPE_AR[type]} مسجّل${q?` · ${fmt(hits.length)} نتيجة`:''} — استخدم البحث للوصول السريع</div>`;
@@ -1266,86 +1446,182 @@ function renderData(){
       : `<div class="empty"><strong>${q?'لا نتائج مطابقة':'لا يوجد '+TYPE_AR[type]+' مسجّل'}</strong>${q?'جرّب حروفًا أقل أو ابحث بالكود.':'اضغط زر الإضافة.'}</div>`;
     if(hits.length>CAP) html+=`<div class="empty" style="padding:14px"><strong>+${fmt(hits.length-CAP)} أخرى</strong>اكتب في البحث لتضييق القائمة.</div>`;
     $('#list-'+type).innerHTML=html;
-
     const box=$('#q-'+type);
     if(box && !box._bound){ box._bound=1; box.addEventListener('input',renderData); }
   });
   $$('[data-edit]').forEach(b=>b.onclick=()=>openEntity(null,b.dataset.edit));
   $$('[data-del]').forEach(b=>b.onclick=()=>delEntity(b.dataset.del));
 }
-$('#btnSaveWh').onclick=()=>{
+$('#btnSaveWh').onclick=async()=>{
   const nm=$('#whName').value.trim();
   if(!nm) return toast('اكتب اسم المخزن.',true);
-  const e=ent(WH); e.name=nm; e.init=n($('#whInit').value); e.initDmg=n($('#whInitDmg').value);
-  save(); renderAll(); toast('حُفظت بيانات المخزن.');
+  const e=Object.assign({},ent(WH),{name:nm,init:num($('#whInit').value),initDmg:num($('#whInitDmg').value)});
+  if(await commit([putEnt(e)])) toast('حُفظت بيانات المخزن.');
 };
 $$('[data-add]').forEach(b=>b.onclick=()=>openEntity(b.dataset.add));
 
 function openEntity(type,id){
   const e=id?ent(id):null, t=e?e.type:type;
   $('#e-id').value=id||''; $('#e-type').value=t;
-  $('#e-name').value=e?e.name:''; $('#e-init').value=e?n(e.init):0; $('#e-note').value=e?(e.note||''):'';
-  $('#e-code').value=e?(e.code||''):'';
+  $('#e-name').value=e?e.name:''; $('#e-init').value=e?num(e.init):0;
+  $('#e-note').value=e?(e.note||''):''; $('#e-code').value=e?(e.code||''):'';
   $('#modalTitle').textContent=(e?'تعديل ':'إضافة ')+TYPE_AR[t];
   $('#e-balwrap').hidden=(t==='driver');
   $('#e-balhint').textContent=t==='sales'?'يمكن أن يكون الرصيد سالبًا إذا كان المبيع مدينًا لك ببكش.':'عدد البكش الموجود عند هذه الجهة قبل تسجيل أي حركة.';
   $('#modal').classList.add('open');
   setTimeout(()=>$('#e-name').focus(),40);
 }
-$('#e-sign').onclick=()=>{ const f=$('#e-init'); f.value=-n(f.value); f.focus(); };
+$('#e-sign').onclick=()=>{ const f=$('#e-init'); f.value=-num(f.value); f.focus(); };
 const closeModal=()=>$('#modal').classList.remove('open');
 $('#modalCancel').onclick=closeModal;
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#drill').classList.remove('open');}});
-$('#entityForm').addEventListener('submit',e=>{
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  closeModal(); $('#drill').classList.remove('open'); closePicker();
+  $('#whyModal').classList.remove('open');
+});
+
+$('#entityForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const id=$('#e-id').value, type=$('#e-type').value, nm=$('#e-name').value.trim();
   if(!nm) return toast('اكتب الاسم.',true);
-  const init=type==='driver'?0:n($('#e-init').value), note=$('#e-note').value.trim();
   const code=$('#e-code').value.trim();
-  if(id){ Object.assign(ent(id),{name:nm,init,note,code}); toast('حُفظ التعديل.'); }
-  else{ db.entities.push({id:uid(),name:nm,type,init,note,code}); toast(`أُضيف ${TYPE_AR[type]} «${nm}».`); }
-  save(); closeModal(); renderAll();
+  // منع التكرار: اسم مطابع أو كود مكرر داخل نفس الفئة يفسد البحث
+  const dupName=db.entities.find(x=>x.id!==id&&x.type===type&&norm(x.name)===norm(nm));
+  if(dupName) return toast(`يوجد ${TYPE_AR[type]} بنفس الاسم «${dupName.name}». ميّز الاسم أو أضف كودًا.`,true);
+  if(code){
+    const dupCode=db.entities.find(x=>x.id!==id&&norm(x.code||'')===norm(code));
+    if(dupCode) return toast(`الكود «${code}» مستخدم بالفعل لـ «${dupCode.name}».`,true);
+  }
+  const init=type==='driver'?0:num($('#e-init').value), note=$('#e-note').value.trim();
+  const rec = id ? Object.assign({},ent(id),{name:nm,init,note,code})
+                 : {id:uid(),name:nm,type,init,note,code};
+  if(await commit([putEnt(rec)])){ closeModal(); toast(id?'حُفظ التعديل.':`أُضيف ${TYPE_AR[type]} «${nm}».`); }
 });
-function delEntity(id){
+async function delEntity(id){
   if(db.txs.some(t=>t.from===id||t.to===id||t.driver===id))
     return toast('لا يمكن الحذف: هذه الجهة مذكورة في حركات مسجّلة. عدّل الاسم بدلًا من الحذف للحفاظ على الدفتر.',true);
   if(!confirm(`حذف «${nameOf(id)}» نهائيًا؟`)) return;
-  db.entities=db.entities.filter(e=>e.id!==id);
-  save(); renderAll(); toast('حُذفت الجهة.');
+  if(await commit([delEnt(id)])) toast('حُذفت الجهة.');
 }
 
-/* ============ النسخ الاحتياطي ============ */
-$('#btnBackup').onclick=()=>{
-  const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+/* ===================== النسخ الاحتياطي ===================== */
+function snapshot(){
+  return {app:'baksha',schema:SCHEMA,exportedAt:Date.now(),
+          entities:db.entities,txs:db.txs,audit:db.audit,
+          meta:{schema:SCHEMA,seq:int(db.meta.seq),lastBackup:int(db.meta.lastBackup)}};
+}
+function download(name,text,mime){
+  const blob=new Blob([text],{type:mime||'application/json'});
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download=`baksha-backup-${dateKey(Date.now())}.json`;
-  a.click(); URL.revokeObjectURL(a.href);
-  db.meta=db.meta||{}; db.meta.lastBackup=Date.now(); save(); renderHome();
+  a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+$('#btnBackup').onclick=async()=>{
+  download(`baksha-backup-${dateKey(Date.now())}.json`,JSON.stringify(snapshot(),null,2));
+  await commit([putKV('lastBackup',Date.now())]);
   toast('نُزّلت النسخة الاحتياطية.');
 };
-$('#btnRestore').onclick=()=>$('#fileInput').click();
+/* CSV بترميز يفتح صحيحًا في إكسل العربي */
+$('#btnCsv').onclick=()=>{
+  const cols=['التسلسل','وقت الحركة','وقت الإدخال','العملية','من','إلى','السائق','سليم','تالف','فاقد','المتبقي','سبب التلف','ملاحظة','الحالة','سبب الإلغاء'];
+  const q=v=>{ const s=String(v==null?'':v); return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const rows=[...db.txs].sort((a,b)=>a.seq-b.seq).map(t=>[
+    t.seq, fmtDT(t.ts), fmtDT(t.createdAt), TX[t.type]?.ar||t.type,
+    t.type==='purchase'?(t.note||'مورّد'):nameOf(t.from), nameOf(t.to),
+    t.driver?nameOf(t.driver):'', num(t.good), num(t.damaged), num(t.lost),
+    t.remain==null?'':num(t.remain), REASONS[t.reason]||'', t.note||'',
+    live(t)?'سارية':'ملغاة', t.voidReason||''
+  ].map(q).join(','));
+  download(`baksha-${dateKey(Date.now())}.csv`,'\uFEFF'+cols.join(',')+'\n'+rows.join('\n'),'text/csv;charset=utf-8');
+  toast('نُزّل ملف CSV يفتح في إكسل.');
+};
+
+/* تحقق صارم قبل أي استيراد */
+function validateBackup(d){
+  const errs=[];
+  if(!d||typeof d!=='object') return ['الملف ليس بصيغة JSON صحيحة.'];
+  if(!Array.isArray(d.entities)) errs.push('قائمة الجهات مفقودة أو تالفة.');
+  if(!Array.isArray(d.txs)) errs.push('قائمة الحركات مفقودة أو تالفة.');
+  if(errs.length) return errs;
+  const OKT=['farm','sales','driver','warehouse','factory'], ids=new Set();
+  for(const e of d.entities){
+    if(!e||typeof e.id!=='string'||!e.name){ errs.push('توجد جهة بلا معرّف أو اسم.'); break; }
+    if(!OKT.includes(e.type)){ errs.push(`نوع جهة غير معروف: ${e.type}`); break; }
+    if(ids.has(e.id)){ errs.push('يوجد معرّف جهة مكرر في الملف.'); break; }
+    ids.add(e.id);
+  }
+  const tids=new Set();
+  for(const t of d.txs){
+    if(!t||typeof t.id!=='string'){ errs.push('توجد حركة بلا معرّف.'); break; }
+    if(!TX[t.type]){ errs.push(`نوع حركة غير معروف: ${t.type}`); break; }
+    if(!isFinite(Number(t.ts))){ errs.push('توجد حركة بتاريخ غير صالح.'); break; }
+    if(tids.has(t.id)){ errs.push('يوجد معرّف حركة مكرر في الملف.'); break; }
+    tids.add(t.id);
+    if(t.from&&!ids.has(t.from)){ errs.push('حركة تشير إلى جهة غير موجودة في الملف.'); break; }
+    if(t.to&&!ids.has(t.to)){ errs.push('حركة تشير إلى جهة غير موجودة في الملف.'); break; }
+  }
+  return errs;
+}
+const cleanTx=t=>Object.assign({},blank,t,{
+  id:String(t.id), ts:int(t.ts), createdAt:int(t.createdAt||t.ts), seq:int(t.seq),
+  good:num(t.good), damaged:num(t.damaged), lost:num(t.lost),
+  remain:t.remain==null?null:num(t.remain), cleared:num(t.cleared),
+  counted:t.counted==null?null:num(t.counted),
+  status:t.status==='void'?'void':'active', note:String(t.note||'').slice(0,200)
+});
+const cleanEnt=e=>({id:String(e.id),name:String(e.name).slice(0,60),type:e.type,
+  init:num(e.init), initDmg:num(e.initDmg), note:String(e.note||'').slice(0,80), code:String(e.code||'').slice(0,12)});
+
+let importMode='replace';
+$('#btnRestore').onclick=()=>{ importMode='replace'; $('#fileInput').click(); };
+$('#btnMerge').onclick=()=>{ importMode='merge'; $('#fileInput').click(); };
 $('#fileInput').addEventListener('change',e=>{
   const file=e.target.files[0]; if(!file) return;
   const r=new FileReader();
-  r.onload=()=>{
+  r.onload=async()=>{
     try{
-      const d=JSON.parse(r.result);
-      if(!d||!Array.isArray(d.entities)||!Array.isArray(d.txs)) throw 0;
-      if(!confirm(`الاستعادة ستستبدل البيانات الحالية بـ ${d.txs.length} حركة و${d.entities.length} جهة. متابعة؟`)) return;
-      db=d; save(); db=load(); renderAll(); toast('استُعيدت البيانات.');
-    }catch(err){ toast('الملف غير صالح: اختر ملف نسخة احتياطية صادرًا من هذا التطبيق.',true); }
+      const raw=JSON.parse(r.result);
+      const errs=validateBackup(raw);
+      if(errs.length) return toast('الملف غير صالح: '+errs[0],true);
+      const d=migrate({entities:raw.entities.map(cleanEnt),txs:raw.txs.map(cleanTx),
+                       audit:Array.isArray(raw.audit)?raw.audit:[],meta:raw.meta||{}});
+      systemEntities(d);
+
+      if(importMode==='merge'){
+        const haveT=new Set(db.txs.map(t=>t.id)), haveE=new Set(db.entities.map(x=>x.id));
+        const newT=d.txs.filter(t=>!haveT.has(t.id)), newE=d.entities.filter(x=>!haveE.has(x.id));
+        if(!newT.length&&!newE.length) return toast('لا جديد في الملف — كل سجلاته موجودة عندك.');
+        if(!confirm(`دمج ${fmt(newT.length)} حركة و${fmt(newE.length)} جهة جديدة مع بياناتك الحالية؟\n\nالسجلات الموجودة لن تتغير.`)) return;
+        const seq=Math.max(int(db.meta.seq),...newT.map(t=>int(t.seq)),0);
+        if(await commit([...newE.map(putEnt),...newT.map(putTx),putKV('seq',seq)]))
+          toast(`دُمجت ${fmt(newT.length)} حركة و${fmt(newE.length)} جهة.`);
+      }else{
+        if(!confirm(`الاستبدال سيمسح بياناتك الحالية (${fmt(db.txs.length)} سجل) ويضع محلها ${fmt(d.txs.length)} سجل من الملف.\n\nمتابعة؟`)) return;
+        const ops=[{store:'entities',action:'clear'},{store:'txs',action:'clear'},{store:'audit',action:'clear'},
+                   ...d.entities.map(putEnt),...d.txs.map(putTx),...d.audit.map(putAud),
+                   putKV('schema',SCHEMA),putKV('seq',int(d.meta.seq)||d.txs.length)];
+        if(await commit(ops)) toast(`استُعيدت البيانات: ${fmt(d.txs.length)} سجل.`);
+      }
+    }catch(err){ console.error(err); toast('تعذّر قراءة الملف. تأكد أنه نسخة صادرة من هذا التطبيق.',true); }
     finally{ e.target.value=''; }
   };
   r.readAsText(file);
 });
-$('#btnWipe').onclick=()=>{
-  if(!confirm('سيُحذف كل السجل نهائيًا من هذا المتصفح. نزّلت نسخة احتياطية؟')) return;
+$('#btnWipe').onclick=async()=>{
+  if(!confirm('سيُحذف كل السجل نهائيًا من هذا الجهاز. نزّلت نسخة احتياطية؟')) return;
   if(!confirm('تأكيد أخير: حذف كل البيانات؟')) return;
-  localStorage.removeItem(KEY); db=seed(); save(); renderAll(); toast('حُذفت كل البيانات.');
+  const ops=[{store:'entities',action:'clear'},{store:'txs',action:'clear'},
+             {store:'audit',action:'clear'},{store:'kv',action:'clear'}];
+  if(await commit(ops)){
+    systemEntities(db); db.meta={schema:SCHEMA,seq:0,lastBackup:0};
+    await idbWrite([...db.entities.map(putEnt),putKV('schema',SCHEMA)]).catch(()=>{});
+    try{ localStorage.removeItem(LS_KEY); }catch(err){}
+    invalidate(); renderAll(); toast('حُذفت كل البيانات.');
+  }
 };
 
-/* ============ التقارير ============ */
+/* ===================== التقارير ===================== */
 const REPS={daily:{ar:'يومية المخزن',icon:'▤'},stmt:{ar:'كشف حساب جهة',icon:'▥'},
             risk:{ar:'مخاطر السائقين',icon:'☗'},all:{ar:'كل الحركات',icon:'▦'},
             audit:{ar:'سجل التغييرات',icon:'✎'}};
@@ -1360,8 +1636,7 @@ function rangeCtl(){
   return `<div class="row three">
     <div><label for="r-from">من تاريخ</label><input id="r-from" type="date" value="${repFrom}"></div>
     <div><label for="r-to">إلى تاريخ</label><input id="r-to" type="date" value="${repTo}"></div>
-    <div><label for="r-q">بحث</label><input id="r-q" type="search" value="${esc(repQ)}" placeholder="اسم جهة، سائق، ملاحظة…"></div>
-  </div>`;
+    <div><label for="r-q">بحث</label><input id="r-q" type="search" value="${esc(repQ)}" placeholder="اسم جهة، سائق، ملاحظة…"></div></div>`;
 }
 function bindRange(){
   const f=$('#r-from'), t=$('#r-to'), q=$('#r-q');
@@ -1369,15 +1644,20 @@ function bindRange(){
   if(t) t.onchange=e=>{repTo=e.target.value;renderReport()};
   if(q) q.oninput=e=>{repQ=e.target.value;clearTimeout(q._t);q._t=setTimeout(renderReport,250)};
 }
-const inRange=t=>{
-  const k=dateKey(t.ts);
-  return (!repFrom||k>=repFrom)&&(!repTo||k<=repTo);
-};
-const matchQ=t=>{
-  if(!repQ.trim()) return true;
-  const s=[TX[t.type]?.ar,nameOf(t.from),nameOf(t.to),t.driver?nameOf(t.driver):'',t.note,REASONS[t.reason]||''].join(' ').toLowerCase();
-  return s.includes(repQ.trim().toLowerCase());
-};
+const inRange=t=>{const k=dateKey(t.ts);return (!repFrom||k>=repFrom)&&(!repTo||k<=repTo)};
+const matchQ=t=>!repQ.trim()||norm([TX[t.type]?.ar,nameOf(t.from),nameOf(t.to),t.driver?nameOf(t.driver):'',t.note,REASONS[t.reason]||''].join(' ')).includes(norm(repQ));
+function filterBar(){
+  if(!(repFrom||repTo||repQ)) return '';
+  const bits=[];
+  if(repFrom||repTo) bits.push(`الفترة ${repFrom||'البداية'} ← ${repTo||'اليوم'}`);
+  if(repQ) bits.push(`بحث: «${esc(repQ)}»`);
+  return `<div class="filterbar no-print"><span>هذا التقرير مفلتر — ${bits.join(' · ')}</span>
+    <button type="button" class="btn ghost sm" id="clearFilter">مسح</button></div>`;
+}
+function bindFilterBar(){ const b=$('#clearFilter'); if(b) b.onclick=()=>{repFrom='';repTo='';repQ='';renderReport()}; }
+function sheetHead(title,sub){
+  return `<div class="rh"><h3>${title}</h3><p>${sub?sub+' · ':''}صدر في <span class="num">${fmtDT(Date.now())}</span> — ${esc(ent(WH).name)}</p></div>`;
+}
 
 function renderReport(){
   const c=$('#repControls'), s=$('#repSheet');
@@ -1386,44 +1666,41 @@ function renderReport(){
     c.style.display='block';
     c.innerHTML=`<label for="r-date">التاريخ</label><input id="r-date" type="date" value="${repDate}">`;
     $('#r-date').onchange=e=>{repDate=e.target.value||dateKey(Date.now());renderReport()};
-
-    // رصيد أول اليوم = كل الحركات قبل هذا التاريخ · رصيد آخره = حتى نهايته
-    const open=whBalance(null,t=>dateKey(t.ts)<repDate);
-    const close=whBalance(null,t=>dateKey(t.ts)<=repDate);
+    const open=whBalance({before:repDate});          // كما كان الدفتر أول اليوم
+    const close=whBalance({asOf:repDate});           // كما كان آخره
     const now=whBalance();
-    const dayTx=db.txs.filter(t=>dateKey(t.ts)===repDate);
-    const lostDay=dayTx.reduce((a,t)=>a+n(t.lost),0);
-    const list=dayTx.filter(t=>t.from===WH||t.to===WH).sort((a,b)=>a.ts-b.ts);
+    const keep=txFilter({asOf:repDate});
+    const dayTx=db.txs.filter(t=>dateKey(t.ts)===repDate).sort((a,b)=>a.ts-b.ts);
+    const lostDay=dayTx.filter(keep).reduce((a,t)=>a+num(t.lost),0);
+    const list=dayTx.filter(t=>t.from===WH||t.to===WH);
     let inG=0,inD=0,outQty=0;
-    list.forEach(t=>{if(t.to===WH){inG+=n(t.good);inD+=n(t.damaged)} if(t.from===WH){outQty+=vol(t)}});
-
+    list.filter(keep).forEach(t=>{if(t.to===WH){inG+=num(t.good);inD+=num(t.damaged)} if(t.from===WH){outQty+=vol(t)}});
     s.innerHTML=sheetHead('يومية المخزن',`${fmtLong(new Date(repDate+'T00:00:00').getTime())} · ${esc(ent(WH).name)}`)
     + `<div class="dsum">
          <span>رصيد أول اليوم — سليم<b>${fmt(open.good)}</b></span>
-         <span>رصيد أول اليوم — تالف<b>${fmt(open.dmg)}</b></span>
-       </div>`
+         <span>رصيد أول اليوم — تالف<b>${fmt(open.dmg)}</b></span></div>`
     + (list.length?`
       <div class="tablewrap"><table>
         <thead><tr><th>الوقت</th><th>الحركة</th><th>الطرف الآخر</th><th>السائق</th><th>داخل</th><th>خارج</th><th>تالف</th></tr></thead>
         <tbody>${list.map(t=>{
-          const other=t.from===WH?nameOf(t.to):(t.type==='purchase'?(t.note||'مورِّد'):nameOf(t.from));
-          const d=new Date(t.ts);
-          return `<tr><td class="n">${d2(d.getHours())}:${d2(d.getMinutes())}</td><td>${TX[t.type].ar}</td>
+          const other=t.from===WH?nameOf(t.to):(t.type==='purchase'?(t.note||'مورّد'):nameOf(t.from));
+          const d=new Date(t.ts), ok=keep(t);
+          return `<tr${ok?'':' style="opacity:.5;text-decoration:line-through"'}>
+            <td class="n">${d2(d.getHours())}:${d2(d.getMinutes())}</td>
+            <td>${TX[t.type].ar}${ok?'':' (ملغاة)'}</td>
             <td>${esc(other)}</td><td>${t.driver?esc(nameOf(t.driver)):'—'}</td>
-            <td class="n">${t.to===WH?fmt(n(t.good)):''}</td><td class="n">${t.from===WH?fmt(vol(t)):''}</td>
-            <td class="n">${t.to===WH&&n(t.damaged)?fmt(t.damaged):''}</td></tr>`}).join('')}</tbody>
+            <td class="n">${t.to===WH?fmt(num(t.good)):''}</td><td class="n">${t.from===WH?fmt(vol(t)):''}</td>
+            <td class="n">${t.to===WH&&num(t.damaged)?fmt(t.damaged):''}</td></tr>`}).join('')}</tbody>
         <tfoot><tr><td colspan="4">حركة اليوم</td><td class="n">${fmt(inG)}</td><td class="n">${fmt(outQty)}</td><td class="n">${fmt(inD)}</td></tr></tfoot>
       </table></div>`
       :`<div class="empty"><strong>لا حركات على المخزن في هذا اليوم</strong>الرصيد بقي كما هو.</div>`)
     + `<div class="dsum" style="border-top:1px solid var(--line)">
          <span>رصيد آخر اليوم — سليم<b>${fmt(close.good)}</b></span>
          <span>رصيد آخر اليوم — تالف<b>${fmt(close.dmg)}</b></span>
-         <span>فاقد اليوم<b style="color:${lostDay>0?'var(--rust)':'var(--hull)'}">${fmt(lostDay)}</b></span>
-       </div>
+         <span>فاقد اليوم<b style="color:${lostDay>0?'var(--rust)':'var(--hull)'}">${fmt(lostDay)}</b></span></div>
        <p class="hint" style="padding:10px 14px 14px;margin:0;border-top:1px solid var(--line)">
          الرصيد الفعلي في المخزن الآن (<span class="num">${fmtDT(Date.now())}</span>):
-         سليم <b class="num">${fmt(now.good)}</b> · تالف <b class="num">${fmt(now.dmg)}</b> · الإجمالي <b class="num">${fmt(now.total)}</b>
-       </p>`;
+         سليم <b class="num">${fmt(now.good)}</b> · تالف <b class="num">${fmt(now.dmg)}</b> · الإجمالي <b class="num">${fmt(now.total)}</b></p>`;
   }
 
   else if(curRep==='stmt'){
@@ -1433,28 +1710,28 @@ function renderReport(){
     $('#r-ent').addEventListener('change',e=>{repEntity=e.target.value;renderReport()});
     const e0=ent(repEntity);
     if(!e0){ s.innerHTML=sheetHead('كشف حساب','')+`<div class="empty"><strong>اختر جهة</strong>سيظهر هنا كل ما خرج إليها وما رجع منها.</div>`; return; }
-    const all=db.txs.filter(t=>t.from===e0.id||t.to===e0.id).sort((a,b)=>a.ts-b.ts);
-    // رصيد أول المدة = الافتتاحي + كل الحركات قبل تاريخ البداية
-    let open=n(e0.init);
+    const all=db.txs.filter(t=>live(t)&&(t.from===e0.id||t.to===e0.id)).sort((a,b)=>a.ts-b.ts);
+    let open=num(e0.init);
     all.forEach(t=>{ if(repFrom&&dateKey(t.ts)<repFrom) open+=(t.to===e0.id?vol(t):-outQ(t)); });
     const list2=all.filter(t=>inRange(t)&&matchQ(t));
     let run=open,tin=0,tout=0,tlost=0;
     const body=list2.map(t=>{
-      const isIn=t.to===e0.id, q=isIn?vol(t):outQ(t), l=isIn?0:n(t.lost);
+      const isIn=t.to===e0.id, q=isIn?vol(t):outQ(t), l=isIn?0:num(t.lost);
       isIn?(run+=q,tin+=q):(run-=q,tout+=q,tlost+=l);
-      const other=isIn?(t.type==='count'?'تسوية جرد':nameOf(t.from)):(t.type==='loss'?'تسوية فاقد':(t.type==='count'?'تسوية جرد':nameOf(t.to)));
+      const other=isIn?nameOf(t.from):(t.type==='settle'?'المخزن (تسوية)':nameOf(t.to));
       return `<tr><td class="n">${fmtDT(t.ts)}</td><td>${TX[t.type].ar}</td><td>${esc(other)}</td>
         <td>${t.driver?esc(nameOf(t.driver)):'—'}</td><td class="n">${isIn?fmt(q):''}</td>
-        <td class="n">${isIn?'':fmt(q)}</td><td class="n"${l>0?' style="color:var(--rust)"':''}>${l?fmt(l):''}</td><td class="n">${fmt(run)}</td></tr>`;
+        <td class="n">${isIn?'':fmt(q)}</td><td class="n"${l>0?' style="color:var(--rust)"':''}>${l?fmt(l):''}</td>
+        <td class="n">${fmt(run)}</td></tr>`;
     }).join('');
     const period=(repFrom||repTo)?`الفترة ${repFrom||'البداية'} ← ${repTo||'اليوم'} · `:'';
-    s.innerHTML=sheetHead(`كشف حساب — ${esc(e0.name)}`,`${TYPE_AR[e0.type]} · ${period}الرصيد الحالي ${fmt(balanceOf(e0.id))} بكش`)+(list2.length?`
+    s.innerHTML=sheetHead(`كشف حساب — ${esc(e0.name)}`,`${TYPE_AR[e0.type]}${e0.code?' · كود '+esc(e0.code):''} · ${period}الرصيد الحالي ${fmt(balanceOf(e0.id))} بكش`)+(list2.length?`
       <div class="tablewrap"><table>
         <thead><tr><th>التاريخ</th><th>الحركة</th><th>الطرف الآخر</th><th>السائق</th><th>وارد</th><th>منصرف</th><th>منه فاقد</th><th>الرصيد</th></tr></thead>
         <tbody><tr><td colspan="7">رصيد أول المدة</td><td class="n">${fmt(open)}</td></tr>${body}</tbody>
         <tfoot><tr><td colspan="4">إجمالي الفترة</td><td class="n">${fmt(tin)}</td><td class="n">${fmt(tout)}</td><td class="n">${fmt(tlost)}</td><td class="n">${fmt(run)}</td></tr>
         ${(repFrom||repTo||repQ)?`<tr><td colspan="7">الرصيد الحالي (كل الفترات)</td><td class="n">${fmt(balanceOf(e0.id))}</td></tr>`:''}</tfoot>
-      </table></div>`:`<div class="empty"><strong>لا حركات مطابقة</strong>رصيد أول المدة ${fmt(open)} بكش. وسّع الفترة أو امسح البحث.</div>`);
+      </table></div>`:`<div class="empty"><strong>لا حركات مطابقة</strong>رصيد أول المدة ${fmt(open)} بكش.</div>`);
   }
 
   else if(curRep==='risk'){
@@ -1472,35 +1749,37 @@ function renderReport(){
         <tfoot><tr><td>الإجمالي</td><td class="n">${fmt(list.reduce((a,r)=>a+r.s.negl,0))}</td>
           <td class="n">${fmt(list.reduce((a,r)=>a+r.s.cleared,0))}</td><td class="n">${fmt(tot)}</td>
           <td class="n">${fmt(list.reduce((a,r)=>a+r.s.nat,0))}</td><td colspan="2"></td></tr></tfoot>
-      </table></div><p class="hint" style="padding:0 14px 14px">التصفية تُسجَّل كحركة في الدفتر ولا تحذف أي تلف سابق من التاريخ.</p>`
-      :`<div class="empty"><strong>لا سائقين مسجّلين</strong>أضف سائقًا من تبويب البيانات لبدء تتبع الإهمال.</div>`);
+      </table></div><p class="hint" style="padding:0 14px 14px">تالف المزارع لا يُحتسب هنا. التصفية تُسجَّل كحركة ولا تحذف أي تلف سابق.</p>`
+      :`<div class="empty"><strong>لا سائقين مسجّلين</strong>أضف سائقًا من تبويب البيانات.</div>`);
     $$('[data-clear]').forEach(b=>b.onclick=()=>clearDriver(b.dataset.clear));
   }
 
   else if(curRep==='all'){
     c.style.display='block'; c.innerHTML=rangeCtl()+filterBar(); bindRange(); bindFilterBar();
     const list=db.txs.filter(t=>inRange(t)&&matchQ(t)).sort((a,b)=>b.ts-a.ts);
-    const filtered=(repFrom||repTo||repQ)?` · ${list.length} من ${db.txs.length}`:'';
-    s.innerHTML=sheetHead('كل الحركات',`${db.txs.length} حركة مسجّلة${filtered}`)+(list.length?`
+    const filtered=(repFrom||repTo||repQ)?` · ${fmt(list.length)} من ${fmt(db.txs.length)}`:'';
+    s.innerHTML=sheetHead('كل الحركات',`${fmt(db.txs.length)} سجل${filtered}`)+(list.length?`
       <div class="tablewrap"><table>
-        <thead><tr><th>التاريخ</th><th>الحركة</th><th>من</th><th>إلى</th><th>السائق</th><th>سليم</th><th>تالف</th><th>فاقد</th><th>السبب/ملاحظة</th><th class="no-print">إجراء</th></tr></thead>
-        <tbody>${list.map(t=>`<tr><td class="n">${fmtDT(t.ts)}</td><td>${TX[t.type].ar}</td>
-          <td>${t.type==='purchase'?esc(t.note||'مورِّد'):esc(nameOf(t.from))}</td>
-          <td>${t.type==='loss'?'خارج النظام':(t.type==='dsettle'?'—':esc(nameOf(t.to)))}</td>
+        <thead><tr><th>#</th><th>التاريخ</th><th>الحركة</th><th>من</th><th>إلى</th><th>السائق</th><th>سليم</th><th>تالف</th><th>فاقد</th><th>ملاحظة</th><th class="no-print">إجراء</th></tr></thead>
+        <tbody>${list.map(t=>{const ok=live(t);return `<tr${ok?'':' style="opacity:.55;text-decoration:line-through"'}>
+          <td class="n">${fmt(t.seq)}</td><td class="n">${fmtDT(t.ts)}</td>
+          <td>${TX[t.type].ar}${ok?'':' <span class="pill d">ملغاة</span>'}${lateEntry(t)?' <span class="pill a">متأخرة</span>':''}</td>
+          <td>${t.type==='purchase'?esc(t.note||'مورّد'):esc(nameOf(t.from))}</td>
+          <td>${t.type==='dsettle'?'—':esc(nameOf(t.to))}</td>
           <td>${t.driver?esc(nameOf(t.driver)):'—'}</td>
           <td class="n">${t.type==='dsettle'?fmt(t.cleared):fmt(t.good)}</td><td class="n">${fmt(t.damaged)}</td>
-          <td class="n"${n(t.lost)>0?' style="color:var(--rust)"':''}>${n(t.lost)?fmt(t.lost):''}</td>
-          <td class="wrap">${esc(REASONS[t.reason]||t.note||'')||'—'}</td>
-          <td class="no-print"><button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
-            <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button></td></tr>`).join('')}</tbody>
+          <td class="n"${num(t.lost)>0?' style="color:var(--rust)"':''}>${num(t.lost)?fmt(t.lost):''}</td>
+          <td class="wrap">${esc(REASONS[t.reason]||t.note||t.voidReason||'')||'—'}</td>
+          <td class="no-print">${ok?`<button class="btn ghost sm" data-edittx="${t.id}">تعديل</button>
+            <button class="btn ghost sm" data-deltx="${t.id}" style="color:var(--rust)">إلغاء</button>`:'—'}</td></tr>`}).join('')}</tbody>
       </table></div>`:`<div class="empty"><strong>لا حركات مطابقة</strong>وسّع الفترة أو امسح البحث.</div>`);
     bindRowActions();
   }
 
-  else { // سجل التغييرات
+  else {
     c.style.display='none'; c.innerHTML='';
     const list=[...db.audit].sort((a,b)=>b.ts-a.ts);
-    s.innerHTML=sheetHead('سجل التغييرات',`${list.length} تعديل أو إلغاء مسجّل`)+(list.length?`
+    s.innerHTML=sheetHead('سجل التغييرات',`${fmt(list.length)} تعديل أو إلغاء`)+(list.length?`
       <div class="tablewrap"><table>
         <thead><tr><th>وقت التغيير</th><th>الإجراء</th><th>قبل</th><th>بعد</th><th>السبب</th></tr></thead>
         <tbody>${list.map(a=>`<tr><td class="n">${fmtDT(a.ts)}</td>
@@ -1508,32 +1787,16 @@ function renderReport(){
           <td class="wrap">${esc(txSummary(a.before))}</td>
           <td class="wrap">${a.after?esc(txSummary(a.after)):'—'}</td>
           <td class="wrap">${esc(a.reason)||'—'}</td></tr>`).join('')}</tbody>
-      </table></div><p class="hint" style="padding:0 14px 14px">هذا السجل للمراجعة فقط ولا يؤثر على الأرصدة.</p>`
+      </table></div><p class="hint" style="padding:0 14px 14px">لا يُحذف أي سجل من الدفتر: الإلغاء يوسم الحركة، والتعديل يُلغي القديمة ويضيف مصحّحة.</p>`
       :`<div class="empty"><strong>لا تغييرات</strong>لم تُعدَّل أو تُلغَ أي حركة حتى الآن.</div>`);
   }
 }
-/* شريط يوضّح أن التقرير مفلتر، حتى لا يُقرأ جزء كأنه الكل */
-function filterBar(){
-  if(!(repFrom||repTo||repQ)) return '';
-  const bits=[];
-  if(repFrom||repTo) bits.push(`الفترة ${repFrom||'البداية'} ← ${repTo||'اليوم'}`);
-  if(repQ) bits.push(`بحث: «${esc(repQ)}»`);
-  return `<div class="filterbar no-print"><span>هذا التقرير مفلتر — ${bits.join(' · ')}</span>
-    <button type="button" class="btn ghost sm" id="clearFilter">مسح</button></div>`;
-}
-function bindFilterBar(){
-  const b=$('#clearFilter');
-  if(b) b.onclick=()=>{ repFrom=''; repTo=''; repQ=''; renderReport(); };
-}
-function sheetHead(title,sub){
-  return `<div class="rh"><h3>${title}</h3><p>${sub?sub+' · ':''}صدر في <span class="num">${fmtDT(Date.now())}</span> — ${esc(ent(WH).name)}</p></div>`;
-}
-function clearDriver(id){
+async function clearDriver(id){
   const s=driverStats(id);
   if(s.open<=0) return;
-  if(!confirm(`تصفية ${fmt(s.open)} بكش إهمال على «${nameOf(id)}»؟ ستُسجَّل كحركة تصفية ويبقى التاريخ كما هو.`)) return;
-  addTx({type:'dsettle',driver:id,cleared:s.open,note:'تصفية غرامة إهمال'});
-  toast(`صُفّي حساب ${nameOf(id)}.`);
+  if(!confirm(`تصفية ${fmt(s.open)} بكش إهمال على «${nameOf(id)}»؟ ستُسجَّل كحركة ويبقى التاريخ كما هو.`)) return;
+  if(await addTx({type:'dsettle',driver:id,cleared:s.open,note:'تصفية غرامة إهمال'}))
+    toast(`صُفّي حساب ${nameOf(id)}.`);
 }
 $('#btnPdf').onclick=()=>{
   if(typeof html2pdf==='undefined') return toast('مكتبة PDF غير محمّلة. استخدم «طباعة» ثم «حفظ كـ PDF».',true);
@@ -1545,7 +1808,7 @@ $('#btnPdf').onclick=()=>{
     .catch(()=>toast('تعذّر إنشاء PDF. استخدم «طباعة» ثم «حفظ كـ PDF».',true));
 };
 
-/* ============ التثبيت والتحديث ============ */
+/* ===================== التثبيت والتحديث ===================== */
 let installPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{
   e.preventDefault(); installPrompt=e;
@@ -1577,10 +1840,15 @@ if('serviceWorker' in navigator){
   });
 }
 
-/* ============ التشغيل ============ */
-function renderAll(){ renderHome(); renderOpsPick(); renderOpForm(); renderData(); renderRepPick(); renderReport();
-  if(!$('#opLog').hidden) renderOpLog(); }
-renderAll();
+/* ===================== التشغيل ===================== */
+function renderAll(){
+  renderHome(); renderOpsPick(); renderOpForm(); renderData(); renderRepPick();
+  // التقارير تبني جداول كبيرة، فلا تُرسم إلا وهي معروضة
+  if($('#view-reports').classList.contains('active')) renderReport();
+  if(!$('#opLog').hidden) renderOpLog();
+}
+boot();
+
 </script>
 </body>
 </html>
