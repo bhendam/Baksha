@@ -85,6 +85,25 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 24px}
 .stat.drill:hover{box-shadow:0 2px 4px rgba(10,34,51,.08),0 10px 22px rgba(10,34,51,.1)}
 .stat.drill:active{transform:translateY(1px)}
 .chev{color:var(--tide);font-weight:700}
+.offbadge{margin-top:3px;display:inline-block;background:var(--amber);color:#fff;border-radius:99px;
+  padding:1px 8px;font-size:.66rem;font-weight:700}
+/* الرسم الأسبوعي */
+.wk{display:flex;gap:6px;align-items:flex-end;height:96px}
+.wk .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.wk .bars{display:flex;gap:2px;align-items:flex-end;height:100%;width:100%;justify-content:center}
+.wk .bar{width:9px;border-radius:3px 3px 0 0;min-height:2px}
+.wk .bar.i{background:var(--catch)}
+.wk .bar.o{background:var(--tide)}
+.wk .lb{font-size:.66rem;color:var(--slate);white-space:nowrap}
+.wk .lb.today{color:var(--tide);font-weight:700}
+/* عمودان على التابلت والحاسب */
+@media(min-width:1024px){
+  .ops-wrap.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
+}
+/* تثبيت العمود الأول في الجداول الطويلة */
+table.sticky1 th:first-child,table.sticky1 td:first-child{position:sticky;inset-inline-start:0;z-index:2;background:var(--paper)}
+table.sticky1 th:first-child{background:var(--ice)}
+table.sticky1 tbody tr:nth-child(even) td:first-child{background:#FAFCFD}
 /* شرائط التنبيه أعلى الرئيسية */
 .strip{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;border:1px solid}
 .strip.warn{background:#FBF0E4;border-color:#EBD3AC;color:#7A5405}
@@ -192,6 +211,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 49%,va
 .hint{font-size:.75rem;color:var(--slate);margin-top:5px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:12px 16px;border-radius:11px;border:1px solid transparent;background:var(--tide);color:#fff;font-weight:600;cursor:pointer;transition:transform .12s ease,background .15s ease}
 .btn:active{transform:translateY(1px)}
+.btn[disabled]{opacity:.6;cursor:progress}
 .btn:hover{background:#0c5c76}
 .btn.block{width:100%;margin-top:16px;padding:14px}
 .btn.ghost{background:transparent;color:var(--tide);border-color:var(--line)}
@@ -234,6 +254,13 @@ th{background:var(--ice);font-size:.75rem;color:var(--deep);font-weight:600;posi
 td.n{font-family:var(--ff-num);direction:ltr;text-align:end}
 td.wrap{white-space:normal;min-width:200px}
 tfoot td{font-weight:700;background:#F7FBFD;border-top:2px solid var(--line)}
+tbody tr:nth-child(even){background:#FAFCFD}
+tbody tr.voided{opacity:.6}
+tbody tr.voided td:not(:nth-child(2)){text-decoration:line-through}
+.vnote{padding:10px 14px;background:#FAEBE7;border-bottom:1px solid #EBC6BB;font-size:.78rem;color:#8f3520}
+.vnote b{font-family:var(--ff-num)}
+td.pos{color:var(--catch);font-weight:700}
+td.neg{color:var(--rust);font-weight:700}
 .pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.72rem;font-weight:600;background:var(--ice);color:var(--deep)}
 .pill.g{background:#E7F6F2;color:#0a6f5e}
 .pill.d{background:#FAEBE7;color:#8f3520}
@@ -281,6 +308,7 @@ nav button[aria-current=page]{color:var(--tide)}
     <div class="hdr-right">
       <div id="hdrDate"></div>
       <div id="hdrCount" class="num"></div>
+      <div id="netBadge" class="offbadge" hidden>بدون إنترنت</div>
     </div>
   </div>
 </header>
@@ -307,6 +335,9 @@ nav button[aria-current=page]{color:var(--tide)}
       <div class="legend" id="assetLegend"></div>
     </div>
 
+    <div class="eyebrow">حركة المخزن — آخر ٧ أيام</div>
+    <div class="card pad" id="weekChart"></div>
+
     <div class="eyebrow">آخر ١٠ حركات</div>
     <div class="card" id="recentList"></div>
   </section>
@@ -318,13 +349,18 @@ nav button[aria-current=page]{color:var(--tide)}
     <div class="tabs" id="opGroups" role="tablist" aria-label="مجموعات العمليات"></div>
     <div class="subtabs" id="opSubs" role="tablist" aria-label="نوع العملية"></div>
     <div class="eyebrow" id="opTitle">تفاصيل العملية</div>
-    <div class="card pad" id="opFormCard"><form id="opForm" autocomplete="off"></form></div>
-    <div class="btnrow"><button type="button" class="btn ghost" id="btnLog">عرض سجل العمليات للتعديل أو الإلغاء</button></div>
-    <div id="opLog" hidden>
-      <input id="logQ" type="search" placeholder="ابحث بالجهة أو السائق أو الملاحظة…">
-      <div class="card" id="logList" style="margin-top:10px"></div>
-      <div class="btnrow"><button type="button" class="btn ghost" id="logMore">عرض المزيد</button></div>
+    <div class="ops-wrap" id="opsWrap">
+      <div>
+        <div class="card pad" id="opFormCard"><form id="opForm" autocomplete="off"></form></div>
+        <div class="btnrow"><button type="button" class="btn ghost" id="btnLog">عرض سجل العمليات للتعديل أو الإلغاء</button></div>
+      </div>
+      <div id="opLog" hidden>
+        <input id="logQ" type="search" placeholder="ابحث بالجهة أو السائق أو الملاحظة…">
+        <div class="card" id="logList" style="margin-top:10px"></div>
+        <div class="btnrow"><button type="button" class="btn ghost" id="logMore">عرض المزيد</button></div>
+      </div>
     </div>
+    <datalist id="noteList"></datalist>
   </section>
 
   <!-- ==================== التقارير ==================== -->
@@ -373,6 +409,17 @@ nav button[aria-current=page]{color:var(--tide)}
       <button class="btn sm" data-add="driver" style="flex:0 0 auto">إضافة</button>
     </div>
     <div class="card" id="list-driver" style="margin-top:10px"></div>
+
+    <div class="eyebrow">العرض</div>
+    <div class="card pad">
+      <label>حجم الخط</label>
+      <div class="chips" id="fsChips">
+        <button type="button" data-fs="100">عادي</button>
+        <button type="button" data-fs="115">كبير</button>
+        <button type="button" data-fs="130">أكبر</button>
+      </div>
+      <p class="hint">مفيد في العنبر أو تحت الشمس. يُحفظ التفضيل على الجهاز.</p>
+    </div>
 
     <div class="eyebrow">تثبيت التطبيق</div>
     <div class="card pad">
@@ -514,6 +561,22 @@ const norm=v=>String(v||'')
   .replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي')
   .replace(/\s+/g,' ').trim().toLowerCase();
 
+const buzz=()=>{ try{ navigator.vibrate&&navigator.vibrate(25); }catch(e){} };
+/* الأرقام العربية الهندية والفواصل تُطبَّع عند اللصق */
+const arDigits=v=>String(v||'').replace(/[\u0660-\u0669]/g,d=>d.charCodeAt(0)-0x0660)
+                               .replace(/[\u06F0-\u06F9]/g,d=>d.charCodeAt(0)-0x06F0);
+document.addEventListener('paste',e=>{
+  const el=e.target;
+  if(!(el instanceof HTMLInputElement)||el.type!=='number') return;
+  const raw=(e.clipboardData||window.clipboardData)?.getData('text')||'';
+  const clean=arDigits(raw).replace(/[^\d-]/g,'');
+  if(clean!==raw){
+    e.preventDefault(); el.value=clean;
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+    el.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+});
+
 const AR_DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 const d2=x=>String(x).padStart(2,'0');
 const dateKey=ts=>{const d=new Date(ts);return `${d.getFullYear()}-${d2(d.getMonth()+1)}-${d2(d.getDate())}`};
@@ -522,6 +585,13 @@ const fmtLong=ts=>`${AR_DAYS[new Date(ts).getDay()]} ${dateKey(ts)}`;
 const toInput=ts=>{const d=new Date(ts);return `${dateKey(ts)}T${d2(d.getHours())}:${d2(d.getMinutes())}`};
 const fromInput=s=>{const t=new Date(s).getTime(); return isNaN(t)?Date.now():t};
 
+let busy=false;    /* يمنع الحفظ المزدوج عند الضغط السريع مرتين */
+function setBusy(btn,on,label){
+  busy=on;
+  if(!btn) return;
+  if(on){ btn.dataset.lbl=btn.textContent; btn.disabled=true; btn.textContent=label||'يحفظ…'; }
+  else { btn.disabled=false; if(btn.dataset.lbl) btn.textContent=btn.dataset.lbl; }
+}
 let toastTimer;
 function toast(msg,isErr,undoFn){
   const box=$('#toast'); box.innerHTML='';
@@ -730,7 +800,10 @@ async function boot(){
     await idbWrite([...db.entities.map(putEnt),...db.txs.map(putTx),putKV('schema',SCHEMA),putKV('seq',db.meta.seq||0)]).catch(()=>{});
   }
 
+  applyFont(db.meta.fontScale||100);
   invalidate(); renderAll();
+  go((location.hash||'#home').slice(1),false);
+  history.replaceState({view:curView},'','#'+curView);
   if(lsFallback) toast('تنبيه: المتصفح لا يدعم التخزين الموسّع، فالسعة محدودة. خُذ نسخًا احتياطية أكثر.',true);
 }
 
@@ -741,7 +814,8 @@ const TX={
   empty:   {ar:'تحويل فارغ',icon:'⇠',cls:'out',hint:'مبيع ← مزرعة'},
   f2f:     {ar:'تحويل بين المزارع',icon:'⇌',cls:'out',hint:'مزرعة ← مزرعة'},
   inbound: {ar:'توريد راجع للمخزن',icon:'↙',cls:'in',hint:'مزرعة أو مبيع ← المخزن'},
-  settle:  {ar:'جرد وتسوية',icon:'⊜',cls:'warn',hint:'مزرعة أو مبيع ← المخزن'},
+  settle:  {ar:'جرد وتسوية الجهات',icon:'⊜',cls:'warn',hint:'مزرعة أو مبيع ← المخزن'},
+  whsettle:{ar:'جرد وتسوية المخزن',icon:'⊞',cls:'warn',hint:'تصحيح رصيد المخزن نفسه'},
   dmg_out: {ar:'إرسال تالف للمصنع',icon:'⊗',cls:'bad',hint:'مخزن ← المصنع'},
   dmg_in:  {ar:'استلام بديل من المصنع',icon:'⊕',cls:'in',hint:'المصنع ← المخزن'},
   purchase:{ar:'شراء بكش جديد',icon:'✚',cls:'in',hint:'إضافة للمخزن'},
@@ -750,9 +824,28 @@ const TX={
   loss:    {ar:'تسوية فاقد (صيغة قديمة)',icon:'✖',cls:'bad',hint:''}
 };
 const REASONS={negligence:'إهمال سائق', natural:'إهلاك طبيعي', farm_wear:'إهلاك بالمزرعة'};
+/* حالات تسوية المخزن. needClass: تحتاج تحديد الصنف (سليم/تالف).
+   أثرها على الأصول: إعادة التصنيف لا تغيّرها، والنقص يخصم، والإضافة تزيد. */
+const WKINDS={
+  to_dmg:  {ar:'تلف بالمركون أو خطأ فرز (سليم ← تالف)', needClass:false},
+  to_good: {ar:'تصحيح فرز (تالف ← سليم)',               needClass:false},
+  short:   {ar:'نقص أو فاقد بالمخزن',                    needClass:true, sign:-1},
+  out_none:{ar:'خروج بكش بلا مستقبل',                    needClass:true, sign:-1},
+  add_ext: {ar:'إضافة من مصدر خارجي غير مدرج',           needClass:true, sign:+1},
+  count:   {ar:'نتيجة جرد كامل للمخزن',                  needClass:false}
+};
+/* يحوّل نوع التسوية والكمية إلى فرق على سليم المخزن وتالفه */
+function whDiffs(kind,cls,q){
+  q=num(q);
+  if(kind==='to_dmg')  return {g:-q,d:+q};
+  if(kind==='to_good') return {g:+q,d:-q};
+  const sg=WKINDS[kind]?.sign||-1;
+  return cls==='damaged' ? {g:0,d:sg*q} : {g:sg*q,d:0};
+}
 const TYPE_AR={farm:'مزرعة',sales:'مبيع',driver:'سائق',warehouse:'مخزن',factory:'مصنع'};
 const blank={good:0,damaged:0,lost:0,remain:null,from:null,to:null,driver:null,reason:null,
-             note:'',counted:null,cleared:0,status:'active',voidedAt:null,voidReason:'',replaces:null};
+             note:'',counted:null,cleared:0,status:'active',voidedAt:null,voidReason:'',replaces:null,
+             wgDiff:0,wdDiff:0,wkind:'',wclass:'',countedGood:null,countedDmg:null};
 
 const ent=id=>db.entities.find(e=>e.id===id);
 const nameOf=id=>id?(ent(id)?.name||'—'):'—';
@@ -783,6 +876,7 @@ function ledger(){
     else if(t.type==='inbound'||t.type==='settle'){ wg+=num(t.good); wd+=num(t.damaged); }
     else if(t.type==='purchase'||t.type==='dmg_in') wg+=num(t.good);
     else if(t.type==='dmg_out')  wd-=num(t.damaged);
+    else if(t.type==='whsettle'){ wg+=num(t.wgDiff); wd+=num(t.wdDiff); }
     const d=t.driver&&drv[t.driver];
     if(d){
       if(t.type!=='dsettle') d.trips++;
@@ -826,6 +920,7 @@ function whBalance(o){
     else if(t.type==='inbound'||t.type==='settle'){ good+=num(t.good); dmg+=num(t.damaged); }
     else if(t.type==='purchase'||t.type==='dmg_in') good+=num(t.good);
     else if(t.type==='dmg_out')  dmg -=num(t.damaged);
+    else if(t.type==='whsettle'){ good+=num(t.wgDiff); dmg+=num(t.wdDiff); }
   }
   return {good,dmg,total:good+dmg};
 }
@@ -874,6 +969,7 @@ function txSummary(t){
   if(!t) return '—';
   const m=TX[t.type]||{ar:t.type};
   if(t.type==='dsettle') return `${m.ar} · ${nameOf(t.driver)} · ${fmt(t.cleared)}`;
+  if(t.type==='whsettle') return `${m.ar} · ${WKINDS[t.wkind]?.ar||''} · سليم ${num(t.wgDiff)>0?'+':''}${fmt(t.wgDiff)} · تالف ${num(t.wdDiff)>0?'+':''}${fmt(t.wdDiff)} · ${fmtDT(t.ts)}`;
   const g=num(t.good), d=num(t.damaged), l=num(t.lost);
   return `${m.ar} · ${nameOf(t.from)}←${nameOf(t.to)} · سليم ${fmt(g)}${d?` تالف ${fmt(d)}`:''}${l?` فاقد ${fmt(l)}`:''} · ${fmtDT(t.ts)}`;
 }
@@ -881,20 +977,39 @@ function txSummary(t){
 const lateEntry=t=>int(t.createdAt)-int(t.ts)>86400000;
 
 /* ===================== التنقل ===================== */
-function go(view){
+const VIEWS=['home','ops','reports','data'];
+let curView='home';
+function go(view,push){
+  if(!VIEWS.includes(view)) view='home';
+  curView=view;
   $$('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
   if(view==='reports') renderReport();
   $$('nav button').forEach(b=>b.dataset.go===view?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
   window.scrollTo({top:0});
+  if(push!==false && location.hash!=='#'+view) history.pushState({view},'','#'+view);
 }
 $$('nav button').forEach(b=>b.onclick=()=>go(b.dataset.go));
+/* يُغلق أي نافذة مفتوحة ويُرجع true إن أغلق شيئًا */
+function closeOverlays(){
+  let did=false;
+  [['#picker','open'],['#drill','open'],['#modal','open'],['#whyModal','open']].forEach(([sel,cls])=>{
+    const el=$(sel);
+    if(el&&el.classList.contains(cls)){ el.classList.remove(cls); did=true; }
+  });
+  return did;
+}
+/* زر الرجوع في أندرويد: يغلق النافذة أو يرجع تبويبًا، ولا يُخرج من التطبيق فجأة */
+window.addEventListener('popstate',()=>{
+  if(closeOverlays()){ history.pushState({view:curView},'','#'+curView); return; }
+  go((location.hash||'#home').slice(1),false);
+});
 
 /* ===================== نافذة سبب التغيير ===================== */
 const WHY_EDIT=['تصحيح كمية','تصحيح الجهة','تصحيح التاريخ','خطأ إدخال'];
 const WHY_VOID=['خطأ إدخال','حركة مكررة','لم تحدث فعلًا','سُجّلت لجهة خطأ'];
-let whyCB=null;
-function askWhy(title,sub,options,cb){
-  whyCB=cb;
+let whyCB=null, whyCancelCB=null;
+function askWhy(title,sub,options,cb,onCancel){
+  whyCB=cb; whyCancelCB=onCancel||null;
   $('#whyTitle').textContent=title;
   $('#whySub').textContent=sub||'';
   $('#whyText').value='';
@@ -905,12 +1020,13 @@ function askWhy(title,sub,options,cb){
   });
   $('#whyModal').classList.add('open');
 }
-$('#whyCancel').onclick=()=>{ $('#whyModal').classList.remove('open'); whyCB=null; };
+$('#whyCancel').onclick=()=>{ $('#whyModal').classList.remove('open'); whyCB=null;
+  const c=whyCancelCB; whyCancelCB=null; c&&c(); };
 $('#whyOk').onclick=()=>{
   const v=$('#whyText').value.trim();
   if(!v) return toast('اختر سببًا أو اكتبه.',true);
   $('#whyModal').classList.remove('open');
-  const cb=whyCB; whyCB=null; cb&&cb(v);
+  const cb=whyCB; whyCB=null; whyCancelCB=null; cb&&cb(v);
 };
 
 /* ===================== منتقي الجهات بالبحث ===================== */
@@ -1033,9 +1149,53 @@ function renderBackupWarn(){
   $('#warnBackup').onclick=()=>$('#btnBackup').click();
 }
 $('#btnQuick').onclick=()=>go('ops');
+/* شارة «بدون إنترنت»: التطبيق يعمل، لكن تصدير PDF يحتاج تحميلًا أوّليًا */
+function netBadge(){ $('#netBadge').hidden=navigator.onLine!==false; }
+window.addEventListener('online',netBadge); window.addEventListener('offline',netBadge); netBadge();
+
+/* آخر الملاحظات المستخدمة تُقترح تلقائيًا في حقول الملاحظة */
+function renderNoteList(){
+  const seen=[];
+  for(const t of [...db.txs].sort((a,b)=>b.ts-a.ts)){
+    const v=(t.note||'').trim();
+    if(v&&!seen.includes(v)) seen.push(v);
+    if(seen.length>=10) break;
+  }
+  $('#noteList').innerHTML=seen.map(v=>`<option value="${esc(v)}"></option>`).join('');
+}
+/* رسم حركة المخزن في آخر سبعة أيام */
+function renderWeek(){
+  const days=[];
+  for(let i=6;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); days.push(d); }
+  const today=dateKey(Date.now());
+  const data=days.map(d=>{
+    const k=dateKey(d.getTime()); let inn=0,out=0;
+    for(const t of db.txs){
+      if(!live(t)||dateKey(t.ts)!==k) continue;
+      if(t.type==='whsettle'){ const net=num(t.wgDiff)+num(t.wdDiff); net>0?inn+=net:out+=-net; continue; }
+      if(t.to===WH)   inn+=vol(t);
+      if(t.from===WH) out+=vol(t);
+    }
+    return {k,d,inn,out};
+  });
+  const max=Math.max(1,...data.map(x=>Math.max(x.inn,x.out)));
+  const any=data.some(x=>x.inn||x.out);
+  $('#weekChart').innerHTML = any ? `<div class="wk">`+data.map(x=>
+    `<div class="col" title="${AR_DAYS[x.d.getDay()]} ${x.k} — داخل ${fmt(x.inn)} · خارج ${fmt(x.out)}">
+       <div class="bars">
+         <div class="bar i" style="height:${Math.round(x.inn/max*100)}%"></div>
+         <div class="bar o" style="height:${Math.round(x.out/max*100)}%"></div>
+       </div>
+       <div class="lb ${x.k===today?'today':''}">${AR_DAYS[x.d.getDay()].replace('ال','')}</div>
+     </div>`).join('')+`</div>
+     <div class="legend"><span><i class="dot" style="background:var(--catch)"></i>داخل للمخزن</span>
+       <span><i class="dot" style="background:var(--tide)"></i>خارج منه</span>
+       <span>أعلى عمود <b>${fmt(max)}</b> بكش</span></div>`
+    : `<div class="hint" style="margin:0;text-align:center">لا حركة على المخزن في آخر سبعة أيام.</div>`;
+}
 
 function renderHome(){
-  renderSetup(); renderBackupWarn();
+  renderSetup(); renderBackupWarn(); renderWeek(); renderNoteList();
   const t=totals();
   $('#s-assets').textContent=fmt(t.assets);
   $('#s-wh').textContent=fmt(t.w.total);
@@ -1058,7 +1218,7 @@ function renderHome(){
                                  : '<div class="seg x" style="flex:1;opacity:.25"></div>';
   $('#assetLegend').innerHTML = parts.map(p=>`<span><i class="dot" style="background:var(--${p.c})"></i>${p.l} <b>${fmt(p.v)}</b>${sum?` · ${Math.round(p.v/sum*100)}%`:''}</span>`).join('');
 
-  const recent=[...db.txs].sort((a,b)=>b.ts-a.ts).slice(0,10);
+  const recent=db.txs.filter(live).sort((a,b)=>b.ts-a.ts).slice(0,10);
   $('#recentList').innerHTML = recent.length ? recent.map(t=>txRow(t,true)).join('')
     : `<div class="empty"><strong>الدفتر فارغ</strong>ابدأ من تبويب العمليات لتسجيل أول حركة.</div>`;
   bindRowActions();
@@ -1142,10 +1302,11 @@ const GROUPS=[
   {k:'out',  ar:'صادر',    icon:'↗', sub:['outbound','dmg_out']},
   {k:'in',   ar:'وارد',    icon:'↙', sub:['inbound','dmg_in','purchase']},
   {k:'move', ar:'تحويلات', icon:'⇄', sub:['sale','empty','f2f']},
-  {k:'adj',  ar:'تسويات',  icon:'⊜', sub:['settle']}
+  {k:'adj',  ar:'تسويات',  icon:'⊜', sub:['settle','whsettle']}
 ];
 const SHORT={outbound:'صرف عهدة',dmg_out:'تالف للمصنع',inbound:'توريد راجع',dmg_in:'بديل من المصنع',
-             purchase:'شراء جديد',sale:'بيع سمك',empty:'تحويل فارغ',f2f:'بين المزارع',settle:'جرد وتسوية'};
+             purchase:'شراء جديد',sale:'بيع سمك',empty:'تحويل فارغ',f2f:'بين المزارع',
+             settle:'جرد الجهات',whsettle:'جرد المخزن'};
 const groupOf=op=>GROUPS.find(g=>g.sub.includes(op))||GROUPS[0];
 let curOp='outbound', editing=null;
 
@@ -1237,22 +1398,54 @@ function renderOpForm(){
       <div class="hint">اكتب 0 إذا صُفّيت العهدة بالكامل.</div>
       <div class="calcbox" id="settleInfo">اختر الجهة أولًا.</div>
       ${driverSel(false,V('driver'))}
-      <label for="f-note">سبب الفاقد / ملاحظة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}" placeholder="اسم الجارد، سبب النقص، ...">`;
+      <label for="f-note">سبب الفاقد / ملاحظة</label><input id="f-note" type="text" list="noteList" maxlength="80" value="${esc(V('note',''))}" placeholder="اسم الجارد، سبب النقص، ...">`;
+  }
+  else if(curOp==='whsettle'){
+    const mode=(editing&&editing.wkind==='count')?'count':'direct';
+    h=`<div class="hint">لتصحيح رصيد المخزن نفسه: تلف بالمركون، خطأ فرز، فاقد، إضافة من خارج، أو خروج بلا مستقبل.</div>
+      <label>طريقة الإدخال</label>
+      <div class="chips" id="wmChips">
+        <button type="button" data-wm="direct" aria-selected="${mode==='direct'}">تسوية مباشرة</button>
+        <button type="button" data-wm="count" aria-selected="${mode==='count'}">بجرد كامل</button>
+      </div>
+      <input type="hidden" id="f-wmode" value="${mode}">
+      <div id="wDirect" style="display:${mode==='direct'?'block':'none'}">
+        <label for="f-wkind">نوع التسوية</label>
+        <select id="f-wkind">${Object.entries(WKINDS).filter(([k])=>k!=='count').map(([k,v])=>
+          `<option value="${k}" ${V('wkind')===k?'selected':''}>${v.ar}</option>`).join('')}</select>
+        <div id="wClassWrap">
+          <label for="f-wclass">الصنف</label>
+          <select id="f-wclass">
+            <option value="good" ${V('wclass')==='good'?'selected':''}>سليم</option>
+            <option value="damaged" ${V('wclass')==='damaged'?'selected':''}>تالف</option>
+          </select>
+        </div>
+        ${qtyF('f-wqty','عدد البكش',Math.abs(num(V('wgDiff',0)))||Math.abs(num(V('wdDiff',0)))||'')}
+      </div>
+      <div id="wCount" style="display:${mode==='count'?'block':'none'}">
+        <div class="row two">
+          <div>${qtyF('f-cgood','<span class="lg g"></span>المعدود سليم',V('countedGood'))}</div>
+          <div>${qtyF('f-cdmg','<span class="lg d"></span>المعدود تالف',V('countedDmg'))}</div>
+        </div>
+      </div>
+      <div class="calcbox" id="whInfo"></div>
+      <label for="f-note">سبب التسوية / ملاحظة</label>
+      <input id="f-note" type="text" list="noteList" maxlength="80" value="${esc(V('note',''))}" placeholder="اسم الجارد، تفاصيل التلف، مصدر الإضافة…">`;
   }
   else if(curOp==='dmg_out'){
     h=`<div class="hint">التالف المتاح بالمخزن: <b class="num">${fmt(w.dmg)}</b> بكش.</div>
       ${qtyF('f-damaged','عدد البكش التالف المرسل',V('damaged'))}${driverSel(false,V('driver'))}
-      <label for="f-note">ملاحظة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}" placeholder="رقم إذن الإرسال مثلًا">`;
+      <label for="f-note">ملاحظة</label><input id="f-note" type="text" list="noteList" maxlength="80" value="${esc(V('note',''))}" placeholder="رقم إذن الإرسال مثلًا">`;
   }
   else if(curOp==='dmg_in'){
     h=`<div class="hint">يُضاف البديل إلى رصيد المخزن السليم.</div>
       ${qtyF('f-good','عدد البكش السليم المستلم',V('good'))}${driverSel(false,V('driver'))}
-      <label for="f-note">ملاحظة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}">`;
+      <label for="f-note">ملاحظة</label><input id="f-note" type="text" list="noteList" maxlength="80" value="${esc(V('note',''))}">`;
   }
   else if(curOp==='purchase'){
     h=`<div class="hint">الشراء يرفع إجمالي الأصول.</div>
       ${qtyF('f-good','عدد البكش المشترى',V('good'))}
-      <label for="f-note">المورّد / رقم الفاتورة</label><input id="f-note" type="text" maxlength="80" value="${esc(V('note',''))}">`;
+      <label for="f-note">المورّد / رقم الفاتورة</label><input id="f-note" type="text" list="noteList" maxlength="80" value="${esc(V('note',''))}">`;
   }
   f.innerHTML=h+whenF()+`<button type="submit" class="btn block">${editing?'حفظ التعديل':'تسجيل '+TX[curOp].ar}</button>`;
 
@@ -1268,6 +1461,20 @@ function renderOpForm(){
     $('#f-damaged').addEventListener('input',syncReason);
     $('#f-from').addEventListener('change',syncReason);
     syncReason();
+  }
+  if(curOp==='whsettle'){
+    const u=()=>updateWh();
+    $$('[data-wm]').forEach(b=>b.onclick=()=>{
+      $('#f-wmode').value=b.dataset.wm;
+      $$('[data-wm]').forEach(x=>x.setAttribute('aria-selected',x===b));
+      $('#wDirect').style.display=b.dataset.wm==='direct'?'block':'none';
+      $('#wCount').style.display=b.dataset.wm==='count'?'block':'none';
+      u();
+    });
+    ['#f-wkind','#f-wclass','#f-wqty','#f-cgood','#f-cdmg'].forEach(x=>{
+      $(x).addEventListener('input',u); $(x).addEventListener('change',u);
+    });
+    u();
   }
   if(curOp==='settle'){
     const u=()=>updateSettle();
@@ -1297,8 +1504,42 @@ function updateSettle(){
   else { box.classList.add('ok'); box.innerHTML=head+`<span class="big">مطابق تمامًا</span>لا فاقد ولا زيادة.`; }
 }
 
+/* يحوّل المُدخل إلى فرق على سليم المخزن وتالفه، ويوضّح أثره على الأصول */
+function whCalc(){
+  const book=whBalance(editing?{skip:editing.id}:null);
+  const mode=$('#f-wmode').value;
+  if(mode==='count'){
+    const cg=$('#f-cgood').value, cd=$('#f-cdmg').value;
+    if(cg===''&&cd==='') return {book,ready:false};
+    return {book,ready:true,g:num(cg)-book.good,d:num(cd)-book.dmg,kind:'count',cg:num(cg),cd:num(cd)};
+  }
+  const kind=$('#f-wkind').value, q=$('#f-wqty').value;
+  $('#wClassWrap').style.display = WKINDS[kind]?.needClass ? 'block':'none';
+  if(q===''||num(q)<=0) return {book,ready:false};
+  const df=whDiffs(kind,$('#f-wclass').value,q);
+  return {book,ready:true,g:df.g,d:df.d,kind,cls:$('#f-wclass').value};
+}
+function updateWh(){
+  const box=$('#whInfo'), c=whCalc();
+  box.className='calcbox';
+  const head=`الرصيد الدفتري: سليم <b class="num">${fmt(c.book.good)}</b> · تالف <b class="num">${fmt(c.book.dmg)}</b>`;
+  if(!c.ready){ box.innerHTML=head+` · <span style="color:var(--slate)">أدخل الكمية</span>`; return; }
+  const ng=c.book.good+c.g, nd=c.book.dmg+c.d, net=c.g+c.d;
+  const after=`<br>بعد التسوية: سليم <b class="num">${fmt(ng)}</b> · تالف <b class="num">${fmt(nd)}</b>`;
+  if(ng<0||nd<0){ box.classList.add('bad');
+    box.innerHTML=head+after+`<span class="big">⚠ رصيد سالب</span>الكمية أكبر من الموجود بالدفتر. صحّح العدد.`; return; }
+  if(net===0){ box.classList.add('ok');
+    box.innerHTML=head+after+`<span class="big">إعادة تصنيف فقط</span>إجمالي الأصول لا يتغيّر — البكش نفسه انتقل بين السليم والتالف.`; }
+  else if(net<0){ box.classList.add('bad');
+    box.innerHTML=head+after+`<span class="big">⚠ نقص ${fmt(-net)} بكش</span>سيُخصم نهائيًا من إجمالي الأصول.`; }
+  else { box.classList.add('up');
+    box.innerHTML=head+after+`<span class="big">زيادة ${fmt(net)} بكش</span>ستُضاف إلى إجمالي الأصول.`; }
+}
+
 $('#opForm').addEventListener('submit',async e=>{
   e.preventDefault();
+  if(busy) return;                       // ضغطة ثانية سريعة لا تسجّل حركة مكررة
+  const btn=$('#opForm button[type=submit]');
   const g=id=>$(id)?$(id).value:'';
   const good=num(g('#f-good')), dmg=num(g('#f-damaged'));
   const from=g('#f-from')||null, to=g('#f-to')||null, driver=g('#f-driver')||null;
@@ -1335,6 +1576,17 @@ $('#opForm').addEventListener('submit',async e=>{
     o={type:'settle',from,to:WH,good,damaged:dmg,lost:c.lost,remain:num(g('#f-remain')),
        driver,reason:dmg>0?reasonVal(from):null,note,ts};
   }
+  else if(curOp==='whsettle'){
+    const c=whCalc();
+    if(!c.ready) return stop('أدخل الكمية أو العدد المعدود.');
+    if(c.g===0&&c.d===0) return stop('لا فرق بين المعدود والدفتري. لا حاجة لتسوية.');
+    if(c.book.good+c.g<0||c.book.dmg+c.d<0) return stop('التسوية تجعل رصيد المخزن سالبًا. صحّح العدد.');
+    const net=c.g+c.d;
+    if(net<0 && !confirm(`نقص ${fmt(-net)} بكش بالمخزن.\n\nسيُخصم نهائيًا من إجمالي الأصول.\n\nتأكيد التسجيل؟`)) return;
+    if(net>0 && !confirm(`زيادة ${fmt(net)} بكش ستُضاف لرصيد المخزن وإلى إجمالي الأصول.\n\nتأكيد التسجيل؟`)) return;
+    o={type:'whsettle',from:null,to:null,wgDiff:c.g,wdDiff:c.d,wkind:c.kind,wclass:c.cls||'',
+       countedGood:c.cg??null,countedDmg:c.cd??null,note,ts};
+  }
   else if(curOp==='dmg_out'){
     if(dmg<=0) return stop('أدخل عددًا أكبر من صفر.');
     if(dmg>w.dmg) return stop(`رصيد التالف بالمخزن ${fmt(w.dmg)} بكش فقط.`);
@@ -1352,17 +1604,23 @@ $('#opForm').addEventListener('submit',async e=>{
 
   if(editing){
     const before=editing;
+    setBusy(btn,true,'بانتظار السبب…');
     askWhy('سبب التعديل',txSummary(before),WHY_EDIT,async why=>{
       // append-only: القديم يُوسم ملغى، والجديد يشير إليه
       const voided=Object.assign({},before,{status:'void',voidedAt:Date.now(),voidReason:'تعديل: '+why});
       const fresh=newTx(Object.assign({},o,{replaces:before.id}));
       const a=auditRec('edit',before,fresh,why);
       editing=null;
-      if(await commit([putTx(voided),putTx(fresh),putAud(a),putKV('seq',fresh.seq)]))
-        toast('حُفظ التعديل. الحركة الأصلية محفوظة كملغاة في السجل.');
-    });
+      const ok=await commit([putTx(voided),putTx(fresh),putAud(a),putKV('seq',fresh.seq)]);
+      setBusy(btn,false);
+      if(ok){ buzz(); toast('حُفظ التعديل. الحركة الأصلية محفوظة كملغاة في السجل.'); }
+    },()=>setBusy(btn,false));
   }else{
-    if(await addTx(o)){
+    setBusy(btn,true);
+    const done=await addTx(o);
+    setBusy(btn,false);
+    if(done){
+      buzz();
       toast(o.type==='settle'&&num(o.lost)>0
         ? `سُجّلت التسوية. خُصم فاقد ${fmt(o.lost)} بكش من عهدة ${nameOf(o.from)}.`
         : `تم تسجيل ${TX[curOp].ar}.`);
@@ -1411,8 +1669,10 @@ function renderOpLog(){
 }
 $('#btnLog').onclick=()=>{
   const box=$('#opLog'); box.hidden=!box.hidden;
+  $('#opsWrap').classList.toggle('two',!box.hidden);   // عمودان على الشاشات الواسعة
   $('#btnLog').textContent = box.hidden ? 'عرض سجل العمليات للتعديل أو الإلغاء' : 'إخفاء السجل';
-  if(!box.hidden){ logCount=15; renderOpLog(); box.scrollIntoView({behavior:'smooth',block:'start'}); }
+  if(!box.hidden){ logCount=15; renderOpLog();
+    if(window.innerWidth<1024) box.scrollIntoView({behavior:'smooth',block:'start'}); }
 };
 $('#logQ').addEventListener('input',()=>{ logCount=15; renderOpLog(); });
 $('#logMore').onclick=()=>{ logCount+=15; renderOpLog(); };
@@ -1453,10 +1713,14 @@ function renderData(){
   $$('[data-del]').forEach(b=>b.onclick=()=>delEntity(b.dataset.del));
 }
 $('#btnSaveWh').onclick=async()=>{
+  if(busy) return;
   const nm=$('#whName').value.trim();
   if(!nm) return toast('اكتب اسم المخزن.',true);
   const e=Object.assign({},ent(WH),{name:nm,init:num($('#whInit').value),initDmg:num($('#whInitDmg').value)});
-  if(await commit([putEnt(e)])) toast('حُفظت بيانات المخزن.');
+  setBusy($('#btnSaveWh'),true);
+  const ok=await commit([putEnt(e)]);
+  setBusy($('#btnSaveWh'),false);
+  if(ok){ buzz(); toast('حُفظت بيانات المخزن.'); }
 };
 $$('[data-add]').forEach(b=>b.onclick=()=>openEntity(b.dataset.add));
 
@@ -1483,6 +1747,8 @@ document.addEventListener('keydown',e=>{
 
 $('#entityForm').addEventListener('submit',async e=>{
   e.preventDefault();
+  if(busy) return;
+  const sbtn=$('#entityForm button[type=submit]');
   const id=$('#e-id').value, type=$('#e-type').value, nm=$('#e-name').value.trim();
   if(!nm) return toast('اكتب الاسم.',true);
   const code=$('#e-code').value.trim();
@@ -1496,7 +1762,10 @@ $('#entityForm').addEventListener('submit',async e=>{
   const init=type==='driver'?0:num($('#e-init').value), note=$('#e-note').value.trim();
   const rec = id ? Object.assign({},ent(id),{name:nm,init,note,code})
                  : {id:uid(),name:nm,type,init,note,code};
-  if(await commit([putEnt(rec)])){ closeModal(); toast(id?'حُفظ التعديل.':`أُضيف ${TYPE_AR[type]} «${nm}».`); }
+  setBusy(sbtn,true);
+  const ok=await commit([putEnt(rec)]);
+  setBusy(sbtn,false);
+  if(ok){ closeModal(); buzz(); toast(id?'حُفظ التعديل.':`أُضيف ${TYPE_AR[type]} «${nm}».`); }
 });
 async function delEntity(id){
   if(db.txs.some(t=>t.from===id||t.to===id||t.driver===id))
@@ -1526,7 +1795,7 @@ $('#btnBackup').onclick=async()=>{
 $('#btnCsv').onclick=()=>{
   const cols=['التسلسل','وقت الحركة','وقت الإدخال','العملية','من','إلى','السائق','سليم','تالف','فاقد','المتبقي','سبب التلف','ملاحظة','الحالة','سبب الإلغاء'];
   const q=v=>{ const s=String(v==null?'':v); return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
-  const rows=[...db.txs].sort((a,b)=>a.seq-b.seq).map(t=>[
+  const rows=db.txs.filter(live).sort((a,b)=>a.seq-b.seq).map(t=>[
     t.seq, fmtDT(t.ts), fmtDT(t.createdAt), TX[t.type]?.ar||t.type,
     t.type==='purchase'?(t.note||'مورّد'):nameOf(t.from), nameOf(t.to),
     t.driver?nameOf(t.driver):'', num(t.good), num(t.damaged), num(t.lost),
@@ -1655,6 +1924,8 @@ function filterBar(){
     <button type="button" class="btn ghost sm" id="clearFilter">مسح</button></div>`;
 }
 function bindFilterBar(){ const b=$('#clearFilter'); if(b) b.onclick=()=>{repFrom='';repTo='';repQ='';renderReport()}; }
+/* سطر يوضّح وجود حركات ملغاة داخل التقرير */
+const voidNote=n0=>`<div class="vnote">يشمل هذا التقرير <b class="num">${fmt(n0)}</b> حركة ملغاة — تظهر مشطوبة ولا تدخل في أي إجمالي.</div>`;
 function sheetHead(title,sub){
   return `<div class="rh"><h3>${title}</h3><p>${sub?sub+' · ':''}صدر في <span class="num">${fmtDT(Date.now())}</span> — ${esc(ent(WH).name)}</p></div>`;
 }
@@ -1672,25 +1943,38 @@ function renderReport(){
     const keep=txFilter({asOf:repDate});
     const dayTx=db.txs.filter(t=>dateKey(t.ts)===repDate).sort((a,b)=>a.ts-b.ts);
     const lostDay=dayTx.filter(keep).reduce((a,t)=>a+num(t.lost),0);
-    const list=dayTx.filter(t=>t.from===WH||t.to===WH);
+    const list=dayTx.filter(t=>keep(t)&&(t.from===WH||t.to===WH||t.type==='whsettle'));
     let inG=0,inD=0,outQty=0;
-    list.filter(keep).forEach(t=>{if(t.to===WH){inG+=num(t.good);inD+=num(t.damaged)} if(t.from===WH){outQty+=vol(t)}});
+    list.filter(keep).forEach(t=>{
+      if(t.type==='whsettle'){
+        if(num(t.wgDiff)>0) inG+=num(t.wgDiff); else outQty+=-num(t.wgDiff);
+        if(num(t.wdDiff)>0) inD+=num(t.wdDiff);
+        return;
+      }
+      if(t.to===WH){inG+=num(t.good);inD+=num(t.damaged)}
+      if(t.from===WH){outQty+=vol(t)}
+    });
     s.innerHTML=sheetHead('يومية المخزن',`${fmtLong(new Date(repDate+'T00:00:00').getTime())} · ${esc(ent(WH).name)}`)
     + `<div class="dsum">
          <span>رصيد أول اليوم — سليم<b>${fmt(open.good)}</b></span>
          <span>رصيد أول اليوم — تالف<b>${fmt(open.dmg)}</b></span></div>`
     + (list.length?`
-      <div class="tablewrap"><table>
+      <div class="tablewrap"><table class="sticky1">
         <thead><tr><th>الوقت</th><th>الحركة</th><th>الطرف الآخر</th><th>السائق</th><th>داخل</th><th>خارج</th><th>تالف</th></tr></thead>
         <tbody>${list.map(t=>{
-          const other=t.from===WH?nameOf(t.to):(t.type==='purchase'?(t.note||'مورّد'):nameOf(t.from));
-          const d=new Date(t.ts), ok=keep(t);
-          return `<tr${ok?'':' style="opacity:.5;text-decoration:line-through"'}>
+          const other=t.type==='whsettle'?(WKINDS[t.wkind]?.ar||'تسوية')
+                      :t.from===WH?nameOf(t.to)
+                      :(t.type==='purchase'?(t.note||'مورّد'):nameOf(t.from));
+          const d=new Date(t.ts), isW=t.type==='whsettle';
+          const inC = isW ? (num(t.wgDiff)>0?fmt(t.wgDiff):'') : (t.to===WH?fmt(num(t.good)):'');
+          const outC= isW ? (num(t.wgDiff)<0?fmt(-t.wgDiff):'') : (t.from===WH?fmt(vol(t)):'');
+          const dmC = isW ? (num(t.wdDiff)?(num(t.wdDiff)>0?'+':'')+fmt(t.wdDiff):'') : (t.to===WH&&num(t.damaged)?fmt(t.damaged):'');
+          return `<tr>
             <td class="n">${d2(d.getHours())}:${d2(d.getMinutes())}</td>
-            <td>${TX[t.type].ar}${ok?'':' (ملغاة)'}</td>
+            <td>${TX[t.type].ar}</td>
             <td>${esc(other)}</td><td>${t.driver?esc(nameOf(t.driver)):'—'}</td>
-            <td class="n">${t.to===WH?fmt(num(t.good)):''}</td><td class="n">${t.from===WH?fmt(vol(t)):''}</td>
-            <td class="n">${t.to===WH&&num(t.damaged)?fmt(t.damaged):''}</td></tr>`}).join('')}</tbody>
+            <td class="n">${inC}</td><td class="n">${outC}</td>
+            <td class="n">${dmC}</td></tr>`}).join('')}</tbody>
         <tfoot><tr><td colspan="4">حركة اليوم</td><td class="n">${fmt(inG)}</td><td class="n">${fmt(outQty)}</td><td class="n">${fmt(inD)}</td></tr></tfoot>
       </table></div>`
       :`<div class="empty"><strong>لا حركات على المخزن في هذا اليوم</strong>الرصيد بقي كما هو.</div>`)
@@ -1710,6 +1994,7 @@ function renderReport(){
     $('#r-ent').addEventListener('change',e=>{repEntity=e.target.value;renderReport()});
     const e0=ent(repEntity);
     if(!e0){ s.innerHTML=sheetHead('كشف حساب','')+`<div class="empty"><strong>اختر جهة</strong>سيظهر هنا كل ما خرج إليها وما رجع منها.</div>`; return; }
+    // التقارير تعرض الحركات السارية فقط — الملغاة لا تظهر إطلاقًا
     const all=db.txs.filter(t=>live(t)&&(t.from===e0.id||t.to===e0.id)).sort((a,b)=>a.ts-b.ts);
     let open=num(e0.init);
     all.forEach(t=>{ if(repFrom&&dateKey(t.ts)<repFrom) open+=(t.to===e0.id?vol(t):-outQ(t)); });
@@ -1719,14 +2004,16 @@ function renderReport(){
       const isIn=t.to===e0.id, q=isIn?vol(t):outQ(t), l=isIn?0:num(t.lost);
       isIn?(run+=q,tin+=q):(run-=q,tout+=q,tlost+=l);
       const other=isIn?nameOf(t.from):(t.type==='settle'?'المخزن (تسوية)':nameOf(t.to));
-      return `<tr><td class="n">${fmtDT(t.ts)}</td><td>${TX[t.type].ar}</td><td>${esc(other)}</td>
+      return `<tr><td class="n">${fmtDT(t.ts)}</td>
+        <td>${TX[t.type].ar}</td><td>${esc(other)}</td>
         <td>${t.driver?esc(nameOf(t.driver)):'—'}</td><td class="n">${isIn?fmt(q):''}</td>
         <td class="n">${isIn?'':fmt(q)}</td><td class="n"${l>0?' style="color:var(--rust)"':''}>${l?fmt(l):''}</td>
         <td class="n">${fmt(run)}</td></tr>`;
     }).join('');
     const period=(repFrom||repTo)?`الفترة ${repFrom||'البداية'} ← ${repTo||'اليوم'} · `:'';
-    s.innerHTML=sheetHead(`كشف حساب — ${esc(e0.name)}`,`${TYPE_AR[e0.type]}${e0.code?' · كود '+esc(e0.code):''} · ${period}الرصيد الحالي ${fmt(balanceOf(e0.id))} بكش`)+(list2.length?`
-      <div class="tablewrap"><table>
+    s.innerHTML=sheetHead(`كشف حساب — ${esc(e0.name)}`,`${TYPE_AR[e0.type]}${e0.code?' · كود '+esc(e0.code):''} · ${period}الرصيد الحالي ${fmt(balanceOf(e0.id))} بكش`)
+      +(list2.length?`
+      <div class="tablewrap"><table class="sticky1">
         <thead><tr><th>التاريخ</th><th>الحركة</th><th>الطرف الآخر</th><th>السائق</th><th>وارد</th><th>منصرف</th><th>منه فاقد</th><th>الرصيد</th></tr></thead>
         <tbody><tr><td colspan="7">رصيد أول المدة</td><td class="n">${fmt(open)}</td></tr>${body}</tbody>
         <tfoot><tr><td colspan="4">إجمالي الفترة</td><td class="n">${fmt(tin)}</td><td class="n">${fmt(tout)}</td><td class="n">${fmt(tlost)}</td><td class="n">${fmt(run)}</td></tr>
@@ -1740,7 +2027,7 @@ function renderReport(){
     const list=drivers.map(d=>({d,s:driverStats(d.id)})).sort((a,b)=>b.s.open-a.s.open);
     const tot=list.reduce((s,r)=>s+r.s.open,0);
     s.innerHTML=sheetHead('لوحة مخاطر السائقين',`${drivers.length} سائق · إجمالي الغرامات القائمة ${fmt(tot)} بكش`)+(list.length?`
-      <div class="tablewrap"><table>
+      <div class="tablewrap"><table class="sticky1">
         <thead><tr><th>السائق</th><th>إهمال</th><th>مُصفّى</th><th>قائم</th><th>إهلاك طبيعي</th><th>رحلات</th><th class="no-print">إجراء</th></tr></thead>
         <tbody>${list.map(({d,s})=>`<tr><td>${esc(d.name)} ${s.open>0?`<span class="pill a">${fmt(s.open)} قائم</span>`:`<span class="pill g">نظيف</span>`}</td>
           <td class="n">${fmt(s.negl)}</td><td class="n">${fmt(s.cleared)}</td><td class="n"><b>${fmt(s.open)}</b></td>
@@ -1756,12 +2043,13 @@ function renderReport(){
 
   else if(curRep==='all'){
     c.style.display='block'; c.innerHTML=rangeCtl()+filterBar(); bindRange(); bindFilterBar();
-    const list=db.txs.filter(t=>inRange(t)&&matchQ(t)).sort((a,b)=>b.ts-a.ts);
-    const filtered=(repFrom||repTo||repQ)?` · ${fmt(list.length)} من ${fmt(db.txs.length)}`:'';
-    s.innerHTML=sheetHead('كل الحركات',`${fmt(db.txs.length)} سجل${filtered}`)+(list.length?`
-      <div class="tablewrap"><table>
+    const liveTx=db.txs.filter(live);
+    const list=liveTx.filter(t=>inRange(t)&&matchQ(t)).sort((a,b)=>b.ts-a.ts);
+    const filtered=(repFrom||repTo||repQ)?` · ${fmt(list.length)} من ${fmt(liveTx.length)}`:'';
+    s.innerHTML=sheetHead('كل الحركات',`${fmt(liveTx.length)} حركة سارية`)+(list.length?`
+      <div class="tablewrap"><table class="sticky1">
         <thead><tr><th>#</th><th>التاريخ</th><th>الحركة</th><th>من</th><th>إلى</th><th>السائق</th><th>سليم</th><th>تالف</th><th>فاقد</th><th>ملاحظة</th><th class="no-print">إجراء</th></tr></thead>
-        <tbody>${list.map(t=>{const ok=live(t);return `<tr${ok?'':' style="opacity:.55;text-decoration:line-through"'}>
+        <tbody>${list.map(t=>{const ok=true;return `<tr>
           <td class="n">${fmt(t.seq)}</td><td class="n">${fmtDT(t.ts)}</td>
           <td>${TX[t.type].ar}${ok?'':' <span class="pill d">ملغاة</span>'}${lateEntry(t)?' <span class="pill a">متأخرة</span>':''}</td>
           <td>${t.type==='purchase'?esc(t.note||'مورّد'):esc(nameOf(t.from))}</td>
@@ -1780,16 +2068,28 @@ function renderReport(){
     c.style.display='none'; c.innerHTML='';
     const list=[...db.audit].sort((a,b)=>b.ts-a.ts);
     s.innerHTML=sheetHead('سجل التغييرات',`${fmt(list.length)} تعديل أو إلغاء`)+(list.length?`
-      <div class="tablewrap"><table>
-        <thead><tr><th>وقت التغيير</th><th>الإجراء</th><th>قبل</th><th>بعد</th><th>السبب</th></tr></thead>
+      <div class="tablewrap"><table class="sticky1">
+        <thead><tr><th>وقت التغيير</th><th>الإجراء</th><th>قبل</th><th>بعد</th><th>السبب</th><th class="no-print">إجراء</th></tr></thead>
         <tbody>${list.map(a=>`<tr><td class="n">${fmtDT(a.ts)}</td>
-          <td>${a.action==='edit'?'<span class="pill a">تعديل</span>':'<span class="pill d">إلغاء</span>'}</td>
+          <td>${a.action==='edit'?'<span class="pill a">تعديل</span>':a.action==='restore'?'<span class="pill g">استرجاع</span>':'<span class="pill d">إلغاء</span>'}</td>
           <td class="wrap">${esc(txSummary(a.before))}</td>
           <td class="wrap">${a.after?esc(txSummary(a.after)):'—'}</td>
-          <td class="wrap">${esc(a.reason)||'—'}</td></tr>`).join('')}</tbody>
-      </table></div><p class="hint" style="padding:0 14px 14px">لا يُحذف أي سجل من الدفتر: الإلغاء يوسم الحركة، والتعديل يُلغي القديمة ويضيف مصحّحة.</p>`
+          <td class="wrap">${esc(a.reason)||'—'}</td>
+          <td class="no-print">${a.action==='void'&&db.txs.find(t=>t.id===a.txId&&!live(t))
+            ?`<button class="btn ghost sm" data-restore="${a.txId}">استرجاع</button>`:'—'}</td></tr>`).join('')}</tbody>
+      </table></div><p class="hint" style="padding:0 14px 14px">التقارير تعرض الحركات السارية فقط. الملغاة محفوظة هنا ولا تُحذف من قاعدة البيانات، ويمكن استرجاع أي حركة أُلغيت بالخطأ.</p>`
       :`<div class="empty"><strong>لا تغييرات</strong>لم تُعدَّل أو تُلغَ أي حركة حتى الآن.</div>`);
+    $$('[data-restore]').forEach(b=>b.onclick=()=>restoreTx(b.dataset.restore));
   }
+}
+/* استرجاع حركة أُلغيت بالخطأ — من سجل التغييرات فقط */
+async function restoreTx(id){
+  const t=db.txs.find(x=>x.id===id);
+  if(!t||live(t)) return;
+  if(!confirm(`استرجاع هذه الحركة؟\n\n${txSummary(t)}\n\nستعود سارية وتؤثر في الأرصدة من جديد.`)) return;
+  const back=Object.assign({},t,{status:'active',voidedAt:null,voidReason:''});
+  const a=auditRec('restore',t,back,'استرجاع حركة ملغاة');
+  if(await commit([putTx(back),putAud(a)])) toast('رجعت الحركة سارية.');
 }
 async function clearDriver(id){
   const s=driverStats(id);
@@ -1798,6 +2098,16 @@ async function clearDriver(id){
   if(await addTx({type:'dsettle',driver:id,cleared:s.open,note:'تصفية غرامة إهمال'}))
     toast(`صُفّي حساب ${nameOf(id)}.`);
 }
+/* حجم الخط: يُحفظ في التخزين ويُطبَّق عند الإقلاع */
+function applyFont(scale){
+  document.documentElement.style.fontSize=(num(scale)||100)+'%';
+  $$('[data-fs]').forEach(b=>b.setAttribute('aria-selected', num(b.dataset.fs)===(num(scale)||100)));
+}
+$$('[data-fs]').forEach(b=>b.onclick=async()=>{
+  applyFont(b.dataset.fs);
+  await commit([putKV('fontScale',num(b.dataset.fs))]);
+});
+
 $('#btnPdf').onclick=()=>{
   if(typeof html2pdf==='undefined') return toast('مكتبة PDF غير محمّلة. استخدم «طباعة» ثم «حفظ كـ PDF».',true);
   const name=(REPS[curRep]?.ar||'تقرير')+'-'+dateKey(Date.now())+'.pdf';
